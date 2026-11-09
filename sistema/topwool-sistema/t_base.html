@@ -7,12 +7,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/estilo.css">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#5b4636">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Topwool">
+<link rel="apple-touch-icon" href="/static/icono-180.png">
 </head>
 <body>
 <header class="barra">
   <div class="marca">TOPWOOL<small>sistema</small></div>
   <nav class="nav">
     <a href="/pedidos" class="{{ 'activo' if seccion=='pedidos' }}">Pedidos web</a>
+    <a href="/produccion" class="{{ 'activo' if seccion=='produccion' }}">Producción</a>
     <a href="/seguimiento" class="{{ 'activo' if seccion=='seguimiento' }}">Seguimiento</a>
     <a href="/sin-pagar" class="{{ 'activo' if seccion=='sinpagar' }}">Sin pagar</a>
     <a href="/inventario" class="{{ 'activo' if seccion=='inventario' }}">Inventario</a>

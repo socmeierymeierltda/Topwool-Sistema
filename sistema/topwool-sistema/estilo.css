@@ -64,9 +64,23 @@ tr.dif td{background:#fffaf0}
 .subir{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .subir input[type=file]{max-width:340px;background:transparent;border:0;padding:0}
 @media (max-width:820px){
-  main{padding:16px}
-  .barra{padding:0 16px;gap:12px}
+  main{padding:14px}
+  .barra{padding:0 10px;gap:8px;height:auto;flex-wrap:wrap;padding-top:8px}
+  .marca{font-size:15px}
   .marca small{display:none}
+  .salir{margin-left:auto}
+  .nav{order:3;flex-basis:100%;padding:6px 0 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .nav a,.nav span{padding:8px 11px;font-size:14px}
+  h1{font-size:21px}
+  .tarjeta{padding:14px}
+  button,.boton{padding:10px 14px}
+  button.chico,.boton.chico{padding:8px 11px}
+  input,select,textarea{font-size:16px}
+  th,td{padding:8px;font-size:13px}
+  .acciones{justify-content:stretch}
+  .acciones>button{flex:1}
+  .filtros input,.filtros select{max-width:none!important;flex:1 1 140px}
   .grilla{grid-template-columns:1fr 1fr}
   .c2,.c3,.c4,.c6,.c12{grid-column:span 2}
 }

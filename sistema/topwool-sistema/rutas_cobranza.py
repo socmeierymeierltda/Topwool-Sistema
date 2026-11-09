@@ -285,6 +285,102 @@ def seguimiento(request: Request, etapa: str = "", q: str = ""):
                    error_drive=error)
 
 
+# ---------------- envío a producción ----------------
+@router.get("/produccion", response_class=HTMLResponse)
+def produccion(request: Request):
+    import produccion as pr
+    import seguimiento as sg
+    error, lista = None, []
+    if config.DEMO or not config.PEDIDOS_SHEET_ID:
+        error = "Para enviar a producción el sistema tiene que estar conectado al Drive de pedidos."
+    else:
+        try:
+            lista = pr.listos(sg.leer_drive())
+        except Exception as e:  # noqa: BLE001
+            import sheets
+            error = f"No pude leer el Drive de pedidos. {sheets.error_claro(e)}"
+    with db.Session() as s:
+        envios = list(s.scalars(select(pr.EnvioProduccion).order_by(pr.EnvioProduccion.id.desc()).limit(30)))
+        color = pr.siguiente_color(s)
+        numero = pr.numero_del_dia(s)
+    return _render(request, "produccion.html", lista=lista, envios=envios, error_drive=error, color=color,
+                   descargar=request.session.pop("descargar", None),
+                   numero=numero, claves={f["fila"]: sg.clave(f) for f in lista},
+                   correo=db.ajustes()["correo_produccion"], smtp=bool(config.SMTP_USER and config.SMTP_PASSWORD))
+
+
+@router.post("/produccion/enviar")
+async def enviar_produccion(request: Request):
+    import produccion as pr
+    import seguimiento as sg
+    form = await request.form()
+    elegidas = set(form.getlist("claves"))
+    if not elegidas:
+        return _volver(request, "/produccion", error="No elegiste pedidos.")
+    aj = db.ajustes()
+    try:
+        actuales = pr.listos(sg.leer_drive())          # se vuelve a leer: otra persona pudo editar
+    except Exception as e:  # noqa: BLE001
+        import sheets
+        return _volver(request, "/produccion", error=f"No pude leer el Drive. {sheets.error_claro(e)}")
+    filas_ = [f for f in actuales if sg.clave(f) in elegidas]
+    faltan = len(elegidas) - len(filas_)
+    if not filas_:
+        return _volver(request, "/produccion", error="Esos pedidos ya no están listos en el Drive (¿alguien los pintó o cambió?).")
+    with db.Session() as s:
+        color, numero = pr.siguiente_color(s), pr.numero_del_dia(s)
+    ahora = datetime.now()
+    titulo = f"Envío a producción N° {numero} — {ahora:%d-%m-%Y %H:%M} — {len(filas_)} pedidos"
+    contenido = pr.excel(filas_, titulo)
+    nombre = f"produccion_{ahora:%Y-%m-%d}_envio{numero}.xlsx"
+    destino = aj["correo_produccion"]
+    estado_correo = ""
+    if form.get("correo") and destino:
+        try:
+            pr.enviar_correo(destino, f"Pedidos a producción {ahora:%d-%m-%Y} - envío {numero}",
+                             f"Se adjuntan {len(filas_)} pedidos para imprimir (carta horizontal).\n\n"
+                             + "\n".join(f"- {f['cliente']}" for f in filas_), contenido, nombre)
+            estado_correo = destino
+        except Exception as e:  # noqa: BLE001
+            return _volver(request, "/produccion",
+                           error=f"No se pudo enviar el correo, así que no marqué nada en el Drive: {str(e)[:200]}")
+    try:
+        pr.pintar([f["fila"] for f in filas_], color)
+    except Exception as e:  # noqa: BLE001
+        import sheets
+        estado_correo += f" · no pude pintar el Drive: {sheets.error_claro(e)}"
+    with db.Session() as s:
+        env = pr.EnvioProduccion(fecha=ahora, numero_dia=numero, color=color, cantidad=len(filas_),
+                                 clientes=pr.resumen_clientes(filas_), correo=estado_correo or "solo descarga",
+                                 excel=contenido)
+        s.add(env)
+        s.commit()
+        eid = env.id
+    msg = f"Envío N° {numero}: {len(filas_)} pedidos marcados en el Drive"
+    msg += f" y enviados a {destino}." if estado_correo.startswith(destino or "@@") else ". Descarga el Excel en la lista de envíos."
+    if faltan:
+        msg += f" Ojo: {faltan} pedido(s) ya no estaban listos y no se incluyeron."
+    request.session["descargar"] = eid
+    return _volver(request, "/produccion", aviso=msg)
+
+
+@router.get("/produccion/vista-previa")
+def vista_previa():
+    import produccion as pr
+    import seguimiento as sg
+    filas_ = pr.listos(sg.leer_drive())
+    contenido = pr.excel(filas_, f"VISTA PREVIA — {datetime.now():%d-%m-%Y %H:%M} — {len(filas_)} pedidos")
+    return _descarga(io.BytesIO(contenido), f"vista_previa_produccion_{date.today():%Y-%m-%d}", "xlsx")
+
+
+@router.get("/produccion/{eid}/excel")
+def excel_envio(eid: int):
+    import produccion as pr
+    with db.Session() as s:
+        e = s.get(pr.EnvioProduccion, eid)
+        return _descarga(io.BytesIO(e.excel), f"produccion_{e.fecha:%Y-%m-%d}_envio{e.numero_dia}", "xlsx")
+
+
 # ---------------- exportar y reportes ----------------
 CABS = ["Fecha", "Días", "Cliente", "Documento", "Folio", "Vendedor", "Despacho", "Seguimiento",
         "Monto", "Flete", "Total", "Pagado", "Debe", "Estado", "Comentario"]

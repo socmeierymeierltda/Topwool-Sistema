@@ -13,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 import cobranza  # noqa: F401  (registra sus tablas)
 import seguimiento  # noqa: F401
+import produccion  # noqa: F401
 import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
 
@@ -64,6 +65,16 @@ app.add_middleware(SessionMiddleware, secret_key=config.SECRET_KEY, max_age=60 *
 @app.get("/static/estilo.css")
 def estilo():
     return FileResponse(BASE / "estilo.css", media_type="text/css")
+
+
+@app.get("/static/{nombre}")
+def estaticos(nombre: str):
+    """Ícono y manifiesto para instalar el sistema en el teléfono."""
+    tipos = {"icono-192.png": "image/png", "icono-512.png": "image/png", "icono-180.png": "image/png",
+             "manifest.json": "application/manifest+json"}
+    if nombre not in tipos:
+        return HTMLResponse("No encontrado", status_code=404)
+    return FileResponse(BASE / nombre, media_type=tipos[nombre])
 
 
 # ---------- acceso ----------
@@ -443,6 +454,7 @@ def ver_ajustes(request: Request):
         "Google (cuenta de servicio)": bool(config.GOOGLE_CREDENTIALS_JSON),
         "Drive de pedidos": bool(config.PEDIDOS_SHEET_ID),
         "Base de datos permanente": not config.DATABASE_URL.startswith("sqlite"),
+        "Correo (envío a producción)": bool(config.SMTP_USER and config.SMTP_PASSWORD),
     }
     return render(request, "ajustes.html", aj=db.ajustes(), estado=estado, correo=sheets.correo_servicio())
 

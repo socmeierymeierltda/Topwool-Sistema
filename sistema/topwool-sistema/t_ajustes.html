@@ -27,6 +27,8 @@
     <div class="campo c12" style="margin-top:10px"><b>Correo para pedidos sin pagar</b> <span class="sub">Puedes usar {nombre}, {numero}, {total} y {productos}.</span></div>
     <div class="campo c12"><label>Asunto</label><input name="correo_asunto" value="{{ aj.correo_asunto }}"></div>
     <div class="campo c12"><label>Mensaje</label><textarea name="correo_cuerpo" rows="10">{{ aj.correo_cuerpo }}</textarea></div>
+    <div class="campo c12" style="margin-top:10px"><b>Producción</b></div>
+    <div class="campo c6"><label>Correo de la impresora de Curacautín</label><input name="correo_produccion" value="{{ aj.correo_produccion }}"></div>
     <div class="campo c12" style="margin-top:10px"><b>Cobranza y despachos</b></div>
     <div class="campo c12"><label>Vendedores (nombre en el documento = nombre corto)</label><input name="vendedores" value="{{ aj.vendedores }}"></div>
     <div class="campo c6"><label>Palabras del comentario que indican "ya pagado"</label><input name="palabras_pagado" value="{{ aj.palabras_pagado }}"></div>

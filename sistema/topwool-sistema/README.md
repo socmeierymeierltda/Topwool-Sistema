@@ -32,6 +32,17 @@ Sin claves de WooCommerce corre en **modo demo** (pedidos de ejemplo, no escribe
 4. Compartir el Drive de pedidos como **Editor** con el correo de la cuenta de servicio (aparece en Ajustes del sistema).
 5. Entrar al sistema → **Equivalencias** → subir `Equivalencias_productos_Topwool.xlsx`.
 
+## Correo para el envío a producción (opcional)
+
+Para que el Excel de producción se mande solo a la impresora:
+1. En la cuenta de Google que enviará (por ejemplo socmeierymeierltda@gmail.com): Cuenta de Google → Seguridad → activar **Verificación en 2 pasos**.
+2. Luego **Contraseñas de aplicaciones** → crear una llamada "Sistema Topwool" → copiar la clave de 16 letras.
+3. En Render → Environment: `SMTP_USER` = ese correo, `SMTP_PASSWORD` = la clave de 16 letras.
+
+## Teléfono
+
+Abre la dirección del sistema en el teléfono → menú del navegador → **Agregar a pantalla de inicio**. Queda como una app con ícono propio.
+
 ## Desarrollo local
 
 ```bash

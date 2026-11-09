@@ -29,6 +29,12 @@ PEDIDOS_SHEET_ID = _env("PEDIDOS_SHEET_ID")          # Drive "Pedidos Curacautí
 PEDIDOS_TAB = _env("PEDIDOS_TAB", "Pedidos")
 COBRANZA_SHEET_ID = _env("COBRANZA_SHEET_ID")        # Drive "Ventas" (etapa 3)
 
+# Correo (para enviar el Excel de producción). Con Gmail: contraseña de aplicación.
+SMTP_HOST = _env("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(_env("SMTP_PORT", "465") or 465)
+SMTP_USER = _env("SMTP_USER")
+SMTP_PASSWORD = _env("SMTP_PASSWORD").replace(" ", "")
+
 # Modo demo: muestra pedidos de ejemplo y no escribe en ningún lado
 DEMO = _env("DEMO", "1" if not (WOO_KEY and WOO_SECRET) else "0") == "1"
 
@@ -49,6 +55,8 @@ DEFAULTS = {
     "estados_woo": "processing, on-hold",
     # Pedidos sin pagar y recordatorios
     "estados_sin_pagar": "pending, on-hold",
+    # Envío a producción
+    "correo_produccion": "socmeierymeierltda@gmail.com",
     # Cobranza
     "vendedores": "javier=javier, maria de los angeles=maria, mariajesus=jesu, manuel=manuel, cris=cris",
     "palabras_pagado": "efect, efectivo, pagado",

@@ -50,8 +50,9 @@ def filas_desde_grilla(row_data):
             continue
         colores = [_color(v) for v in vals[:12]]
         color = next((c for c in colores[2:4] if c), "") or next((c for c in colores if c), "")
-        out.append({"fila": i, "comentario": txt[1], "cliente": cliente, "pedido": txt[3], "lugar": txt[5],
-                    "comuna": txt[7], "vendedor": txt[8], "doc": txt[9], "empresa": txt[10], "color": color})
+        out.append({"fila": i, "documento": txt[0], "comentario": txt[1], "cliente": cliente, "pedido": txt[3],
+                    "telefono": txt[4], "lugar": txt[5], "direccion": txt[6], "comuna": txt[7], "vendedor": txt[8],
+                    "doc": txt[9], "empresa": txt[10], "mail": txt[11], "color": color})
     return out
 
 
@@ -66,7 +67,7 @@ def leer_drive():
     return filas_desde_grilla(data)
 
 
-def _clave(f):
+def clave(f):
     return hashlib.sha1("|".join(cb.norm(f[k]) for k in ("cliente", "pedido")).encode()).hexdigest()
 
 
@@ -76,7 +77,7 @@ def actualizar(s, filas):
     out = []
     usados = set()
     for f in filas:
-        k = _clave(f)
+        k = clave(f)
         r = s.get(FilaDrive, k)
         if not r:
             r = FilaDrive(clave=k, visto_desde=ahora)

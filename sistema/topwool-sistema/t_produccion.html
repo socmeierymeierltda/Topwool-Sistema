@@ -1,0 +1,42 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Envío a producción</h1>
+<p class="sub">Pedidos del Drive que dicen <b>curacautin</b> y todavía no tienen color. Al enviarlos se arma el Excel (carta horizontal, sin lugar, comentario ni mail), se manda al correo de la impresora y las filas se pintan en el Drive con el color de esta tanda.</p>
+{% if error_drive %}<div class="msg err">{{ error_drive }}</div>{% endif %}
+{% if descargar %}<div class="msg ok">Excel del envío listo: <a href="/produccion/{{ descargar }}/excel">descargar</a></div>{% endif %}
+{% if not smtp %}<div class="msg demo">El correo todavía no está configurado: por ahora el Excel se descarga y lo envías tú. Para que salga solo, agrega SMTP_USER y SMTP_PASSWORD en Render (ver README).</div>{% endif %}
+
+<form method="post" action="/produccion/enviar" onsubmit="return confirm('¿Enviar a producción los pedidos marcados? Se pintarán en el Drive.')">
+<div class="cab">
+  <b>Listos para enviar: {{ lista|length }}</b>
+  <span class="sub" style="margin:0">Será el envío N° {{ numero }} de hoy · color <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:{{ color }};border:1px solid #0002;vertical-align:middle"></span></span>
+  {% if lista %}<a class="boton sec chico" href="/produccion/vista-previa">Ver Excel antes</a>{% endif %}
+</div>
+{% if lista %}
+<div class="tabla-scroll"><table>
+<tr><th><input type="checkbox" checked onclick="document.querySelectorAll('.sel').forEach(c=>c.checked=this.checked)"></th><th>Fila</th><th>Cliente</th><th>Pedido</th><th>Comuna</th><th>Encargado</th><th>Empresa</th></tr>
+{% for f in lista %}
+<tr><td><input class="sel" type="checkbox" name="claves" value="{{ claves[f.fila] }}" checked></td><td>{{ f.fila }}</td><td><b>{{ f.cliente }}</b>{% if f.comentario %}<br><span class="sub" style="font-size:12px">{{ f.comentario }}</span>{% endif %}</td>
+<td style="font-size:13px">{{ f.pedido }}</td><td>{{ f.comuna }}</td><td>{{ f.vendedor }}</td><td>{{ f.empresa }}</td></tr>
+{% endfor %}
+</table></div>
+<div class="acciones">
+  {% if smtp %}<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="correo" value="1" checked style="width:auto"> Enviar a {{ correo }}</label>{% endif %}
+  <button class="verde">Enviar a producción</button>
+</div>
+{% elif not error_drive %}<div class="vacio">No hay pedidos pendientes de enviar.</div>{% endif %}
+</form>
+
+<h2>Envíos anteriores</h2>
+{% if envios %}
+<div class="tabla-scroll"><table>
+<tr><th>Fecha</th><th>Envío</th><th>Color</th><th class="n">Pedidos</th><th>Correo</th><th></th></tr>
+{% for e in envios %}
+<tr><td>{{ e.fecha.strftime('%d-%m-%Y %H:%M') }}</td><td>N° {{ e.numero_dia }}</td>
+<td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:{{ e.color }};border:1px solid #0002"></span></td>
+<td class="n">{{ e.cantidad }}</td><td style="font-size:13px">{{ e.correo }}</td>
+<td><a class="boton sec chico" href="/produccion/{{ e.id }}/excel">Excel</a></td></tr>
+{% endfor %}
+</table></div>
+{% else %}<div class="vacio">Aún no hay envíos.</div>{% endif %}
+{% endblock %}
