@@ -1,0 +1,90 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Cobranza</h1>
+<p class="sub">Todas las ventas con documento: lo pagado, lo abonado y lo que falta por cobrar. Sube cada día los PDF de documentos y despachos.</p>
+
+<div class="grilla" style="margin-bottom:14px">
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Por cobrar (filtro actual)</span><div style="font-size:26px;font-weight:800;color:var(--rojo)">{{ tot.debe|clp }}</div></div>
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Pagado</span><div style="font-size:26px;font-weight:800;color:var(--verde)">{{ tot.pagado|clp }}</div></div>
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Vendido</span><div style="font-size:26px;font-weight:800">{{ tot.total|clp }}</div></div>
+</div>
+
+<div class="tarjeta">
+  <form class="subir" method="post" action="/cobranza/subir" enctype="multipart/form-data">
+    <b>Documentos del día</b>
+    <input type="file" name="archivos" accept=".pdf" multiple required>
+    <button>Subir PDF</button>
+    <span class="sub" style="margin:0">Facturas, boletas, pagos electrónicos y etiquetas FedEx / Blue, todos juntos.</span>
+  </form>
+  {% if n_revisar or por_avisar or sin_doc %}
+  <div class="estado" style="margin-top:12px">
+    {% if n_revisar %}<a class="chip otro" href="/cobranza?revisar=1">{{ n_revisar }} con cliente por revisar</a>{% endif %}
+    {% if por_avisar %}<form method="post" action="/cobranza/avisar-todos" style="display:inline" onsubmit="return confirm('¿Enviar el seguimiento por correo a {{ por_avisar }} clientes web?')"><button class="chico verde">Avisar despacho a {{ por_avisar }} clientes web</button></form>{% endif %}
+    {% if sin_doc %}<span class="chip transferencia">{{ sin_doc }} etiquetas sin documento todavía</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if por_vendedor %}
+<div class="tarjeta">
+  <b>Deuda por vendedor</b> <span class="sub">— descarga el reporte para enviárselo a cada uno</span>
+  <div class="tabla-scroll" style="margin-top:8px"><table>
+  <tr><th>Vendedor</th><th class="n">Debe</th><th>Reporte</th></tr>
+  {% for v, debe in por_vendedor %}
+  <tr><td>{{ v }}</td><td class="n">{{ debe|clp }}</td>
+  <td><a class="boton sec chico" href="/cobranza/reporte?vendedor={{ v if v!='—' }}&formato=pdf">PDF</a>
+      <a class="boton sec chico" href="/cobranza/reporte?vendedor={{ v if v!='—' }}&formato=xlsx">Excel</a></td></tr>
+  {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+<form class="filtros" method="get">
+  <select name="estado">
+    <option value="">Todos</option>
+    {% for e in ['por pagar','abonado','pagado'] %}<option {{ 'selected' if f.estado==e }}>{{ e }}</option>{% endfor %}
+  </select>
+  <select name="vendedor">
+    <option value="">Todos los vendedores</option>
+    {% for v in vendedores %}<option {{ 'selected' if f.vendedor==v }}>{{ v }}</option>{% endfor %}
+  </select>
+  <input name="q" value="{{ f.q }}" placeholder="Cliente, RUT, folio o comentario" style="max-width:240px">
+  <input type="date" name="desde" value="{{ f.desde }}" style="max-width:150px" title="Desde">
+  <input type="date" name="hasta" value="{{ f.hasta }}" style="max-width:150px" title="Hasta">
+  {% if f.revisar %}<input type="hidden" name="revisar" value="1">{% endif %}
+  <button class="sec">Filtrar</button>
+  <a class="boton sec" href="/cobranza/exportar?formato=xlsx&{{ qs }}">Excel</a>
+  <a class="boton sec" href="/cobranza/exportar?formato=pdf&{{ qs }}">PDF</a>
+  <span class="sub" style="margin:0">{{ n }} documentos</span>
+</form>
+
+{% if lista %}
+<div class="tabla-scroll"><table>
+<tr><th>Fecha</th><th>Cliente</th><th>Doc.</th><th>Vendedor</th><th>Despacho</th><th class="n">Total</th><th class="n">Pagado</th><th class="n">Debe</th><th>Estado</th></tr>
+{% for x in lista %}{% set d = x.d %}
+<tr onclick="location='/cobranza/doc/{{ d.id }}'" style="cursor:pointer">
+<td>{{ d.fecha.strftime('%d-%m-%Y') if d.fecha }}{% if x.debe and x.dias is not none %}<br><span class="sub" style="font-size:12px">{{ x.dias }} días</span>{% endif %}</td>
+<td><b>{{ d.cliente }}</b>{% if d.razon_social and d.razon_social|lower != (d.cliente or '') and 'GEN' not in (d.razon_social or '') %}<br><span class="sub" style="font-size:12px">{{ d.razon_social }}</span>{% endif %}
+  {% if d.revisar %}<br><span class="chip otro" style="margin-top:3px">revisar cliente</span>{% endif %}</td>
+<td>{{ d.tipo }} {{ d.folio or '' }}</td>
+<td>{{ d.vendedor or '' }}</td>
+<td style="font-size:13px">{{ d.empresa or '' }}{% if d.tracking %}<br><span class="sub" style="font-size:12px">{{ d.tracking }}{% if d.notificado %} · avisado{% endif %}</span>{% endif %}</td>
+<td class="n">{{ d.total|clp }}</td><td class="n">{{ x.pagado|clp }}</td><td class="n"><b>{{ x.debe|clp }}</b></td>
+<td><span class="chip {{ 'flow' if x.estado=='pagado' else 'transferencia' if x.estado=='abonado' else 'otro' }}">{{ x.estado }}</span></td>
+</tr>
+{% endfor %}
+</table></div>
+{% if n > 500 %}<p class="sub">Se muestran los primeros 500. Usa los filtros o descarga el Excel para ver todo.</p>{% endif %}
+{% else %}
+<div class="vacio">No hay documentos{{ ' con esos filtros' if qs }}.</div>
+{% endif %}
+
+<div class="tarjeta" style="margin-top:20px">
+  <form class="subir" method="post" action="/cobranza/importar" enctype="multipart/form-data" onsubmit="return confirm('¿Importar la planilla Ventas anterior? Hazlo una sola vez.')">
+    <b>Traer la planilla Ventas anterior</b>
+    <input type="file" name="archivo" accept=".xlsx" required>
+    <button class="sec">Importar (una sola vez)</button>
+  </form>
+  <p class="sub" style="margin:8px 0 0">Descarga la planilla Ventas de Drive como Excel y súbela aquí para traer las deudas que ya existían.</p>
+</div>
+{% endblock %}

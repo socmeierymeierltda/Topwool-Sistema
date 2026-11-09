@@ -42,6 +42,7 @@ class PedidoWeb(Base):
     creado = Column(DateTime)
     enviado = Column(DateTime)
     confirmado = Column(DateTime)
+    contactado = Column(DateTime)
     nota = Column(Text)
 
 
@@ -53,6 +54,13 @@ class Ajuste(Base):
 
 def init():
     Base.metadata.create_all(engine)
+    # columnas agregadas después de la primera versión
+    with engine.begin() as cx:
+        for sql in ["ALTER TABLE pedidos_web ADD COLUMN contactado TIMESTAMP"]:
+            try:
+                cx.exec_driver_sql(sql)
+            except Exception:  # ya existe
+                pass
 
 
 def ajustes() -> dict:

@@ -82,7 +82,7 @@ def preparar(order, aj, por_id, por_sku):
         "sin_equivalencia": [t for t, ok in lineas if not ok],
         "fila": {
             "Documento": "",
-            "Comentario": aj["comentario_transferencia"] if pago == "transferencia" else "",
+            "Comentario": "",
             "Cliente": aj["prefijo_cliente"] + nombre,
             "Pedido": unir([t for t, _ in lineas]),
             "Telefono": (bi.get("phone") or sh.get("phone") or "").replace(" ", ""),

@@ -47,4 +47,23 @@ DEFAULTS = {
     "pago_transferencia": "bacs, transferencia",
     # Estados de WooCommerce que se consideran pedidos nuevos
     "estados_woo": "processing, on-hold",
+    # Pedidos sin pagar y recordatorios
+    "estados_sin_pagar": "pending, on-hold",
+    # Cobranza
+    "vendedores": "javier=javier, maria de los angeles=maria, mariajesus=jesu, manuel=manuel, cris=cris",
+    "palabras_pagado": "efect, efectivo, pagado",
+    "link_fedex": "https://www.fedex.com/fedextrack/?trknbr={n}",
+    "link_blue": "https://www.blue.cl/seguimiento/?n_seguimiento={n}",
+    "link_starken": "https://www.starken.cl/seguimiento?codigo={n}",
+    "aviso_despacho": ("¡Hola {nombre}! Tu pedido de Topwool ya va en camino 🚚\n"
+                       "Empresa de transporte: {empresa}\nN° de seguimiento: {tracking}\n"
+                       "Puedes seguirlo aquí: {link}\n\n¡Gracias por tejer con nosotros!"),
+    "correo_asunto": "Tu pedido #{numero} en Topwool está esperando el pago",
+    "correo_cuerpo": ("Hola {nombre}:\n\n"
+                      "Vimos que tu pedido #{numero} en topwool.cl quedó pendiente de pago.\n\n"
+                      "Productos: {productos}\nTotal: {total}\n\n"
+                      "Si pagaste por transferencia, ¿nos puedes enviar el comprobante respondiendo este correo? "
+                      "Si tuviste algún problema para pagar o quieres cambiar algo, cuéntanos y te ayudamos.\n\n"
+                      "Te guardamos el pedido unos días más.\n\n"
+                      "Un abrazo,\nEquipo Topwool\nwww.topwool.cl"),
 }

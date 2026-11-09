@@ -24,6 +24,17 @@
     <div class="campo c4"><label>Palabras que identifican Flow</label><input name="pago_flow" value="{{ aj.pago_flow }}"></div>
     <div class="campo c4"><label>Palabras que identifican transferencia</label><input name="pago_transferencia" value="{{ aj.pago_transferencia }}"></div>
     <div class="campo c4"><label>Estados de la web a revisar</label><input name="estados_woo" value="{{ aj.estados_woo }}"></div>
+    <div class="campo c12" style="margin-top:10px"><b>Correo para pedidos sin pagar</b> <span class="sub">Puedes usar {nombre}, {numero}, {total} y {productos}.</span></div>
+    <div class="campo c12"><label>Asunto</label><input name="correo_asunto" value="{{ aj.correo_asunto }}"></div>
+    <div class="campo c12"><label>Mensaje</label><textarea name="correo_cuerpo" rows="10">{{ aj.correo_cuerpo }}</textarea></div>
+    <div class="campo c12" style="margin-top:10px"><b>Cobranza y despachos</b></div>
+    <div class="campo c12"><label>Vendedores (nombre en el documento = nombre corto)</label><input name="vendedores" value="{{ aj.vendedores }}"></div>
+    <div class="campo c6"><label>Palabras del comentario que indican "ya pagado"</label><input name="palabras_pagado" value="{{ aj.palabras_pagado }}"></div>
+    <div class="campo c6"><label>Enlace seguimiento FedEx ({n} = número)</label><input name="link_fedex" value="{{ aj.link_fedex }}"></div>
+    <div class="campo c6"><label>Enlace seguimiento Blue ({n} = número)</label><input name="link_blue" value="{{ aj.link_blue }}"></div>
+    <div class="campo c6"><label>Enlace seguimiento Starken ({n} = número)</label><input name="link_starken" value="{{ aj.link_starken }}"></div>
+    <div class="campo c12"><label>Aviso de despacho al cliente web ({nombre}, {empresa}, {tracking}, {link})</label><textarea name="aviso_despacho" rows="6">{{ aj.aviso_despacho }}</textarea></div>
+    <div class="campo c4"><label>Estados "sin pagar" de la web</label><input name="estados_sin_pagar" value="{{ aj.estados_sin_pagar }}"></div>
   </div>
   <div class="acciones"><button>Guardar ajustes</button></div>
 </form>

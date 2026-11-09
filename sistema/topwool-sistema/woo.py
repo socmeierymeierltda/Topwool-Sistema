@@ -17,7 +17,7 @@ def _client():
 def pedidos(estados):
     """Pedidos en los estados indicados (más recientes primero)."""
     if config.DEMO:
-        return PEDIDOS_DEMO
+        return [p for p in PEDIDOS_DEMO if p["status"] in estados]
     out = []
     with _client() as c:
         for page in range(1, 6):
@@ -36,6 +36,49 @@ def agregar_nota(order_id, texto):
         return
     with _client() as c:
         c.post(f"orders/{order_id}/notes", json={"note": texto, "customer_note": False})
+
+
+def buscar_pedido(nombre):
+    """Pedido más reciente cuyo nombre de cliente coincide (para avisar el despacho)."""
+    if config.DEMO:
+        return None
+    import unicodedata
+
+    def n(t):
+        return " ".join(unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower().split())
+    objetivo = n(nombre)
+    with _client() as c:
+        r = c.get("orders", params={"search": nombre, "per_page": 20, "orderby": "date", "order": "desc"})
+        r.raise_for_status()
+        for o in r.json():
+            for d in (o.get("billing") or {}, o.get("shipping") or {}):
+                if n(f"{d.get('first_name', '')} {d.get('last_name', '')}") == objetivo:
+                    return o
+    return None
+
+
+def nota_cliente(order_id, texto):
+    """Nota visible para el cliente: WooCommerce se la envía por correo."""
+    if config.DEMO:
+        return
+    with _client() as c:
+        c.post(f"orders/{order_id}/notes", json={"note": texto, "customer_note": True}).raise_for_status()
+
+
+def cambiar_estado(order_id, estado):
+    if config.DEMO:
+        return
+    with _client() as c:
+        c.put(f"orders/{order_id}", json={"status": estado}).raise_for_status()
+
+
+def cancelar(order_id, nota):
+    """Cambia el pedido a Cancelado (WooCommerce devuelve el stock solo)."""
+    if config.DEMO:
+        return
+    with _client() as c:
+        c.put(f"orders/{order_id}", json={"status": "cancelled"}).raise_for_status()
+        c.post(f"orders/{order_id}/notes", json={"note": nota, "customer_note": False})
 
 
 def catalogo():

@@ -1,0 +1,70 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<p><a href="/cobranza">← Cobranza</a></p>
+<h1>{{ d.tipo|capitalize }} {{ d.folio or '' }} · {{ d.cliente }}</h1>
+<p class="sub">{{ d.fecha.strftime('%d-%m-%Y') if d.fecha }} · {{ d.razon_social or '' }} {% if d.rut %}· RUT {{ d.rut }}{% endif %} {% if d.archivo %}· {{ d.archivo }}{% endif %}</p>
+{% if d.revisar %}<div class="msg err">{{ d.revisar }}. Corrige el cliente (como lo escriben en el Drive) y guarda: el sistema lo recordará para este RUT.</div>{% endif %}
+
+<div class="grilla">
+<div class="c6">
+<form class="tarjeta" method="post" action="/cobranza/doc/{{ d.id }}">
+  <b>Datos</b>
+  <div class="grilla" style="margin-top:8px">
+    <div class="campo c12"><label>Cliente</label><input name="cliente" value="{{ d.cliente or '' }}"></div>
+    <div class="campo c6"><label>Vendedor</label><input name="vendedor" value="{{ d.vendedor or '' }}"></div>
+    <div class="campo c6"><label>Despacho</label><input name="empresa" value="{{ d.empresa or '' }}"></div>
+    <div class="campo c6"><label>N° seguimiento</label><input name="tracking" value="{{ d.tracking or '' }}"></div>
+    <div class="campo c3"><label>Monto</label><input name="monto" value="{{ d.monto }}"></div>
+    <div class="campo c3"><label>Flete</label><input name="flete" value="{{ d.flete }}"></div>
+    <div class="campo c12"><label>Comentario</label><input name="comentario" value="{{ d.comentario or '' }}"></div>
+  </div>
+  <div class="acciones">
+    {% if d.revisar %}<button class="sec" name="confirmar" value="1">El cliente está bien</button>{% endif %}
+    <button>Guardar</button>
+  </div>
+</form>
+
+{% if d.tracking %}
+<div class="tarjeta">
+  <b>Despacho</b>
+  <p style="margin:6px 0">{{ d.empresa|title }} · {{ d.tracking }} {% if link %}· <a href="{{ link }}" target="_blank" rel="noopener">ver seguimiento</a>{% endif %}</p>
+  {% if (d.cliente or '').startswith('web') %}
+    {% if d.notificado %}<span class="chip flow">Cliente avisado el {{ d.notificado.strftime('%d-%m %H:%M') }}</span>{% endif %}
+    <form method="post" action="/cobranza/doc/{{ d.id }}/avisar" style="margin-top:8px"><button class="{{ 'sec' if d.notificado else 'verde' }} chico">{{ 'Avisar de nuevo' if d.notificado else 'Enviar seguimiento al cliente' }}</button></form>
+  {% endif %}
+  {% for x in despachos %}<p class="sub" style="margin:6px 0 0;font-size:12px">Etiqueta: {{ x.archivo }}</p>{% endfor %}
+</div>
+{% endif %}
+
+{% if d.detalle %}
+<div class="tarjeta"><b>Detalle</b><pre style="white-space:pre-wrap;font:13px/1.5 inherit;margin:8px 0 0">{{ d.detalle }}</pre></div>
+{% endif %}
+</div>
+
+<div class="c6">
+<div class="tarjeta">
+  <div class="cab"><b>Pagos</b> <span class="chip {{ 'flow' if estado=='pagado' else 'transferencia' if estado=='abonado' else 'otro' }}">{{ estado }}</span>
+  <span class="der">Total {{ d.total|clp }} · Pagado {{ pagado|clp }} · <b>Debe {{ debe|clp }}</b></span></div>
+  {% if abonos %}
+  <table><tr><th>Fecha</th><th>Medio</th><th class="n">Monto</th><th></th></tr>
+  {% for a in abonos %}
+  <tr><td>{{ a.fecha.strftime('%d-%m-%Y') if a.fecha }}</td><td>{{ a.medio }}{% if a.nota %}<br><span class="sub" style="font-size:12px">{{ a.nota }}</span>{% endif %}</td><td class="n">{{ a.monto|clp }}</td>
+  <td><form method="post" action="/cobranza/abono/{{ a.id }}/borrar" onsubmit="return confirm('¿Eliminar este pago?')"><button class="sec chico">Quitar</button></form></td></tr>
+  {% endfor %}</table>
+  {% else %}<p class="sub">Sin pagos registrados.</p>{% endif %}
+  {% if debe > 0 %}
+  <form method="post" action="/cobranza/doc/{{ d.id }}/abono" style="margin-top:12px">
+    <div class="grilla">
+      <div class="campo c4"><label>Monto</label><input name="monto" inputmode="numeric" placeholder="{{ debe }}"></div>
+      <div class="campo c4"><label>Fecha</label><input type="date" name="fecha" value="{{ hoy }}"></div>
+      <div class="campo c4"><label>Medio</label><select name="medio"><option>Transferencia</option><option>Efectivo</option><option>Flow</option><option>Cheque</option><option>Tarjeta</option><option>Otro</option></select></div>
+      <div class="campo c12"><label>Nota</label><input name="nota" placeholder="Opcional"></div>
+    </div>
+    <div class="acciones"><button class="sec" name="todo" value="1">Pagó todo ({{ debe|clp }})</button><button>Registrar abono</button></div>
+  </form>
+  {% endif %}
+</div>
+<form method="post" action="/cobranza/doc/{{ d.id }}/borrar" onsubmit="return confirm('¿Eliminar este documento y sus pagos del sistema?')" style="text-align:right"><button class="sec chico" style="color:var(--rojo)">Eliminar documento</button></form>
+</div>
+</div>
+{% endblock %}

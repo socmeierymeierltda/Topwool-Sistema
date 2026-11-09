@@ -1,5 +1,6 @@
 """Escritura en Google Sheets (Drive de pedidos)."""
 import json
+import re
 
 import config
 from logica import COLUMNAS
@@ -26,8 +27,25 @@ def correo_servicio():
         return ""
 
 
+def id_planilla(valor: str) -> str:
+    """Acepta el código o la dirección completa de la planilla."""
+    m = re.search(r"/d/([a-zA-Z0-9_-]{20,})", valor or "")
+    return m.group(1) if m else (valor or "").strip().strip("/")
+
+
+def error_claro(e: Exception) -> str:
+    t = str(e)
+    if "<html" in t.lower() or "unable to open the file" in t.lower():
+        return "Google no encuentra la planilla: revisa PEDIDOS_SHEET_ID en Render y que esté compartida con el correo del robot."
+    if "PERMISSION_DENIED" in t or "403" in t:
+        return "Sin permiso: comparte la planilla como Editor con el correo del robot (está en Ajustes)."
+    if "WorksheetNotFound" in type(e).__name__ or "not found" in t.lower():
+        return f"No encontré la pestaña '{config.PEDIDOS_TAB}' en la planilla."
+    return t[:300]
+
+
 def _hoja():
-    return _cliente().open_by_key(config.PEDIDOS_SHEET_ID).worksheet(config.PEDIDOS_TAB)
+    return _cliente().open_by_key(id_planilla(config.PEDIDOS_SHEET_ID)).worksheet(config.PEDIDOS_TAB)
 
 
 def agregar_pedido(fila: dict) -> int:
@@ -44,6 +62,31 @@ def agregar_pedido(fila: dict) -> int:
     valores = [fila[c] for c in COLUMNAS]
     ws.update(range_name=f"A{n}:L{n}", values=[valores], value_input_option="USER_ENTERED")
     return n
+
+
+def _buscar_fila(ws, fila_num, cliente, comentario):
+    candidatos = []
+    if fila_num:
+        candidatos.append(fila_num)
+    candidatos += [c.row for c in ws.findall(cliente, in_column=3)]
+    for r in candidatos:
+        fila = ws.row_values(r)
+        if len(fila) >= 3 and fila[2].strip().lower() == cliente.strip().lower() \
+                and fila[1].strip().upper() == comentario.strip().upper():
+            return r
+    return None
+
+
+def borrar_pedido(fila_num: int, cliente: str, comentario: str) -> bool:
+    """Elimina la fila del pedido sin pagar (solo si sigue con el comentario 'por confirmar')."""
+    if config.DEMO:
+        return True
+    ws = _hoja()
+    r = _buscar_fila(ws, fila_num, cliente, comentario)
+    if r:
+        ws.delete_rows(r)
+        return True
+    return False
 
 
 def quitar_comentario(fila_num: int, cliente: str, comentario: str) -> bool:

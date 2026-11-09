@@ -1,13 +1,13 @@
 {% extends "t_base.html" %}
 {% block contenido %}
 <h1>Pedidos web</h1>
-<p class="sub">Revisa cada pedido, ajusta lo que haga falta y envíalo al Drive de pedidos. Flow entra listo; las transferencias quedan "por confirmar" hasta que finanzas valide el pago.</p>
+<p class="sub">Revisa cada pedido, ajusta lo que haga falta y envíalo al Drive de pedidos. Los pagados con Flow se pueden enviar de inmediato; las transferencias solo se envían cuando finanzas confirma el pago.</p>
 {% if error_woo %}<div class="msg err">{{ error_woo }}</div>{% endif %}
 {% if not n_eq %}<div class="msg err">Todavía no hay equivalencias cargadas: los productos saldrán con el nombre de la web. Súbelas en <a href="/equivalencias">Equivalencias</a>.</div>{% endif %}
 
 <h2>Nuevos <span class="chip">{{ nuevos|length }}</span></h2>
 {% for p in nuevos %}
-<form class="tarjeta" method="post" action="/pedidos/{{ p.woo_id }}/enviar">
+<form class="tarjeta" method="post" action="/pedidos/{{ p.woo_id }}/enviar"{% if p.pago=='transferencia' %} onsubmit="if(event.submitter && event.submitter.dataset.envio){return confirm('¿Finanzas ya confirmó la transferencia del pedido #{{ p.numero }}? Solo así se envía al Drive.')}"{% endif %}>
   <input type="hidden" name="_pago" value="{{ p.pago }}">
   <input type="hidden" name="_numero" value="{{ p.numero }}">
   <input type="hidden" name="_total" value="{{ p.total }}">
@@ -17,7 +17,7 @@
   <input type="hidden" name="Mail" value="{{ p.fila.Mail }}">
   <div class="cab">
     <b>#{{ p.numero }}</b>
-    <span class="chip {{ p.pago }}">{% if p.pago=='flow' %}Flow · pagado{% elif p.pago=='transferencia' %}Transferencia · por confirmar{% else %}{{ p.pago_titulo or 'Pago desconocido' }}{% endif %}</span>
+    <span class="chip {{ p.pago }}">{% if p.pago=='flow' %}Flow · pagado{% elif p.pago=='transferencia' %}Transferencia · esperando pago{% else %}{{ p.pago_titulo or 'Pago desconocido' }}{% endif %}</span>
     <span>{{ p.total|clp }}</span>
     <span class="der">{{ p.fecha }} · estado web: {{ p.estado_woo }}</span>
   </div>
@@ -37,24 +37,36 @@
   {% if p.sin_equivalencia %}<div class="aviso-linea">Sin equivalencia (revisa el texto o agrégala en Equivalencias): {{ p.sin_equivalencia|join(' · ') }}</div>{% endif %}
   <div class="acciones">
     <button class="sec chico" formaction="/pedidos/{{ p.woo_id }}/descartar" title="No enviar este pedido">Ocultar</button>
-    <button class="{{ 'verde' if p.pago=='flow' }}">Enviar al Drive</button>
+    {% if p.pago=='transferencia' %}
+    <a class="boton sec chico" href="/sin-pagar">Escribir al cliente</a>
+    <button class="sec chico" style="color:var(--rojo)" formaction="/pedidos/{{ p.woo_id }}/anular" formnovalidate onclick="return confirm('¿Anular el pedido #{{ p.numero }}? Se cancela en la web.')" name="cancelar_web" value="1">Anular</button>
+    <button class="verde" data-envio="1">Pago confirmado → enviar al Drive</button>
+    {% else %}
+    <button class="{{ 'verde' if p.pago=='flow' }}" data-envio="1">Enviar al Drive</button>
+    {% endif %}
   </div>
 </form>
 {% else %}
 <div class="vacio">No hay pedidos nuevos en la web.</div>
 {% endfor %}
 
-<h2>Transferencias por confirmar <span class="chip">{{ por_confirmar|length }}</span></h2>
 {% if por_confirmar %}
+<h2>Ingresadas antes como "por confirmar" <span class="chip">{{ por_confirmar|length }}</span></h2>
 <div class="tabla-scroll"><table>
 <tr><th>Pedido</th><th>Cliente</th><th>Total</th><th>Ingresado</th><th>Productos</th><th></th></tr>
 {% for p in por_confirmar %}
 <tr><td>#{{ p.numero }}</td><td>{{ p.cliente }}</td><td class="n">{{ p.total|clp }}</td>
 <td>{{ p.enviado.strftime('%d-%m %H:%M') if p.enviado }}</td><td>{{ p.pedido_texto }}</td>
-<td><form method="post" action="/pedidos/{{ p.woo_id }}/confirmar"><button class="verde chico">Pago confirmado</button></form></td></tr>
+<td><div style="display:flex;gap:6px;flex-wrap:wrap">
+<form method="post" action="/pedidos/{{ p.woo_id }}/confirmar"><button class="verde chico">Pago confirmado</button></form>
+<a class="boton sec chico" href="/sin-pagar">Escribir al cliente</a>
+<form method="post" action="/pedidos/{{ p.woo_id }}/anular" onsubmit="return confirm('¿Anular el pedido #{{ p.numero }}? Se borra su fila del Drive y se cancela en la web.')">
+<input type="hidden" name="_volver" value="/pedidos"><input type="hidden" name="cancelar_web" value="1">
+<button class="sec chico" style="color:var(--rojo)">Anular</button></form>
+</div></td></tr>
 {% endfor %}
 </table></div>
-{% else %}<div class="vacio">No hay transferencias pendientes.</div>{% endif %}
+{% endif %}
 
 <h2>Últimos procesados</h2>
 {% if recientes %}
@@ -62,7 +74,7 @@
 <tr><th>Pedido</th><th>Cliente</th><th>Estado</th><th>Fecha</th><th>Fila Drive</th><th></th></tr>
 {% for p in recientes %}
 <tr><td>#{{ p.numero }}</td><td>{{ p.cliente }}</td>
-<td>{% if p.estado=='en_drive' %}<span class="chip flow">En Drive</span>{% else %}<span class="chip">Ocultado</span>{% endif %}</td>
+<td>{% if p.estado=='en_drive' %}<span class="chip flow">En Drive</span>{% elif p.estado=='anulado' %}<span class="chip otro">Anulado</span>{% else %}<span class="chip">Ocultado</span>{% endif %}</td>
 <td>{{ p.enviado.strftime('%d-%m %H:%M') if p.enviado }}</td><td>{{ p.fila_drive or '' }}</td>
 <td><form method="post" action="/pedidos/{{ p.woo_id }}/reabrir"><button class="sec chico" title="Volver a mostrarlo en Nuevos">Volver a nuevos</button></form></td></tr>
 {% endfor %}

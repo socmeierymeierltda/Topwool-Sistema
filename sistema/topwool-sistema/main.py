@@ -11,7 +11,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import delete, func, select
 from starlette.middleware.sessions import SessionMiddleware
 
+import cobranza  # noqa: F401  (registra sus tablas)
 import config, db, inventario, logica, sheets, woo
+import rutas_cobranza
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Sistema Topwool")
@@ -107,7 +109,7 @@ def pedidos(request: Request):
         guardados = {p.woo_id: p for p in s.scalars(select(db.PedidoWeb))}
         por_confirmar = list(s.scalars(select(db.PedidoWeb).where(db.PedidoWeb.estado == "por_confirmar")
                                        .order_by(db.PedidoWeb.enviado.desc())))
-        recientes = list(s.scalars(select(db.PedidoWeb).where(db.PedidoWeb.estado.in_(["en_drive", "descartado"]))
+        recientes = list(s.scalars(select(db.PedidoWeb).where(db.PedidoWeb.estado.in_(["en_drive", "descartado", "anulado"]))
                                    .order_by(db.PedidoWeb.enviado.desc()).limit(15)))
         n_eq = s.scalar(select(func.count()).select_from(db.Equivalencia))
     nuevos = [logica.preparar(o, aj, por_id, por_sku) for o in ordenes
@@ -126,8 +128,9 @@ async def enviar(request: Request, woo_id: int):
         n = sheets.agregar_pedido(fila)
     except Exception as e:  # noqa: BLE001
         traceback.print_exc()
-        return volver(request, "/pedidos", error=f"No se pudo escribir en el Drive: {e}")
-    estado = "por_confirmar" if pago == "transferencia" else "en_drive"
+        return volver(request, "/pedidos", error=f"No se pudo escribir en el Drive. {sheets.error_claro(e)}")
+    # Las transferencias solo llegan aquí cuando el pago ya fue confirmado
+    estado = "en_drive"
     with db.Session() as s:
         p = s.scalar(select(db.PedidoWeb).where(db.PedidoWeb.woo_id == woo_id)) or db.PedidoWeb(woo_id=woo_id)
         p.numero = form.get("_numero")
@@ -142,12 +145,17 @@ async def enviar(request: Request, woo_id: int):
         s.add(p)
         s.commit()
     try:
-        woo.agregar_nota(woo_id, f"Ingresado al Drive de pedidos (fila {n})" + (" — transferencia por confirmar" if estado == "por_confirmar" else ""))
+        woo.agregar_nota(woo_id, f"Ingresado al Drive de pedidos (fila {n})" + (" — transferencia confirmada" if pago == "transferencia" else ""))
     except Exception:  # noqa: BLE001
         pass
+    if pago == "transferencia":
+        try:   # pasa de "En espera" a "Procesando" (WooCommerce avisa al cliente)
+            woo.cambiar_estado(woo_id, "processing")
+        except Exception:  # noqa: BLE001
+            pass
     msg = f"Pedido #{form.get('_numero')} ingresado al Drive" + (f" en la fila {n}" if n else " (modo demo: no se escribió)")
-    if estado == "por_confirmar":
-        msg += ". Quedó como TRANSFERENCIA - POR CONFIRMAR."
+    if pago == "transferencia":
+        msg += " con la transferencia confirmada."
     return volver(request, "/pedidos", aviso=msg)
 
 
@@ -161,7 +169,7 @@ def confirmar(request: Request, woo_id: int):
         try:
             ok = sheets.quitar_comentario(p.fila_drive, p.cliente, aj["comentario_transferencia"])
         except Exception as e:  # noqa: BLE001
-            return volver(request, "/pedidos", error=f"No se pudo actualizar el Drive: {e}")
+            return volver(request, "/pedidos", error=f"No se pudo actualizar el Drive. {sheets.error_claro(e)}")
         p.estado = "en_drive"
         p.confirmado = db.ahora()
         s.commit()
@@ -172,6 +180,107 @@ def confirmar(request: Request, woo_id: int):
     if not ok:
         return volver(request, "/pedidos", aviso=f"Pago de #{p.numero} confirmado. Ojo: no encontré la fila en el Drive para borrar el comentario; bórralo a mano.")
     return volver(request, "/pedidos", aviso=f"Pago de #{p.numero} confirmado y comentario quitado del Drive.")
+
+
+@app.post("/pedidos/{woo_id}/anular")
+async def anular(request: Request, woo_id: int):
+    """Pedido que nunca se pagó: se borra del Drive (si estaba) y se cancela en la web."""
+    form = await request.form()
+    destino = form.get("_volver") or "/pedidos"
+    aj = db.ajustes()
+    borrada = None
+    with db.Session() as s:
+        p = s.scalar(select(db.PedidoWeb).where(db.PedidoWeb.woo_id == woo_id)) or db.PedidoWeb(woo_id=woo_id)
+        if p.estado == "por_confirmar":
+            try:
+                borrada = sheets.borrar_pedido(p.fila_drive, p.cliente, aj["comentario_transferencia"])
+            except Exception as e:  # noqa: BLE001
+                return volver(request, destino, error=f"No pude borrar la fila del Drive. {sheets.error_claro(e)}")
+        p.numero = p.numero or form.get("_numero")
+        p.cliente = p.cliente or form.get("_cliente") or form.get("Cliente")
+        p.estado = "anulado"
+        p.enviado = p.enviado or db.ahora()
+        s.add(p)
+        s.commit()
+        numero = p.numero
+    msg = f"Pedido #{numero} anulado"
+    if form.get("cancelar_web"):
+        try:
+            woo.cancelar(woo_id, "Anulado desde el sistema: no se recibió el pago")
+            msg += " y cancelado en la web (el stock vuelve solo)"
+        except Exception as e:  # noqa: BLE001
+            return volver(request, destino, error=f"{msg}, pero la web no aceptó cancelarlo: {e}")
+    if borrada is False:
+        msg += ". Ojo: no encontré su fila en el Drive, bórrala a mano si sigue ahí"
+    elif borrada:
+        msg += " y su fila se borró del Drive"
+    return volver(request, destino, aviso=msg + ".")
+
+
+@app.post("/pedidos/{woo_id}/contactado")
+async def marcar_contactado(request: Request, woo_id: int):
+    form = await request.form()
+    with db.Session() as s:
+        p = s.scalar(select(db.PedidoWeb).where(db.PedidoWeb.woo_id == woo_id))
+        if not p:
+            p = db.PedidoWeb(woo_id=woo_id, numero=form.get("_numero"), cliente=form.get("_cliente"), estado="nuevo")
+        p.contactado = db.ahora()
+        s.add(p)
+        s.commit()
+    return volver(request, form.get("_volver") or "/sin-pagar", aviso=f"Pedido #{form.get('_numero')} marcado como contactado.")
+
+
+# ---------- pedidos sin pagar ----------
+def _correo(order, aj, por_id, por_sku):
+    from urllib.parse import quote
+    prep = logica.preparar(order, aj, por_id, por_sku)
+    bi = order.get("billing") or {}
+    datos = {"nombre": (bi.get("first_name") or "").strip().title() or "hola",
+             "numero": order.get("number"), "total": tpl.env.filters["clp"](order.get("total")),
+             "productos": ", ".join(f"{int(float(i.get('quantity', 1)))} x {i.get('name')}" for i in order.get("line_items", []))}
+    try:
+        asunto = aj["correo_asunto"].format(**datos)
+        cuerpo = aj["correo_cuerpo"].replace("\\n", "\n").format(**datos)
+    except (KeyError, IndexError, ValueError):
+        asunto, cuerpo = aj["correo_asunto"], aj["correo_cuerpo"]
+    para = bi.get("email", "")
+    return {
+        "gmail": f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(para)}&su={quote(asunto)}&body={quote(cuerpo)}",
+        "mailto": f"mailto:{para}?subject={quote(asunto)}&body={quote(cuerpo)}",
+        "para": para, "prep": prep,
+    }
+
+
+@app.get("/sin-pagar", response_class=HTMLResponse)
+def sin_pagar(request: Request):
+    aj = db.ajustes()
+    error_woo = None
+    try:
+        ordenes = woo.pedidos(db.lista(aj["estados_sin_pagar"]))
+    except Exception as e:  # noqa: BLE001
+        ordenes, error_woo = [], f"No pude leer los pedidos de la web: {e}"
+    if config.DEMO:
+        ordenes = [o for o in ordenes if o.get("status") in ("on-hold", "pending")]
+    por_id, por_sku = logica.mapa_equivalencias()
+    with db.Session() as s:
+        guardados = {p.woo_id: p for p in s.scalars(select(db.PedidoWeb))}
+    hoy = datetime.now()
+    filas = []
+    for o in ordenes:
+        g = guardados.get(o["id"])
+        if g and g.estado in ("anulado", "descartado", "en_drive"):
+            continue
+        try:
+            creado = datetime.fromisoformat((o.get("date_created") or "")[:19])
+            dias = (hoy - creado).days
+        except ValueError:
+            dias = None
+        c = _correo(o, aj, por_id, por_sku)
+        filas.append({"o": o, "dias": dias, "g": g, **c,
+                      "pago": logica.tipo_pago(o, aj),
+                      "cliente": c["prep"]["fila"]["Cliente"]})
+    filas.sort(key=lambda f: -(f["dias"] or 0))
+    return render(request, "sinpagar.html", filas=filas, error_woo=error_woo)
 
 
 @app.post("/pedidos/{woo_id}/descartar")
@@ -320,6 +429,11 @@ async def actualizar_inventario(request: Request):
     return volver(request, "/inventario", aviso=f"Stock actualizado en {n} productos de la web{extra}.")
 
 
+# ---------- cobranza ----------
+rutas_cobranza._ui.update(render=render, volver=volver)
+app.include_router(rutas_cobranza.router)
+
+
 # ---------- ajustes ----------
 @app.get("/ajustes", response_class=HTMLResponse)
 def ver_ajustes(request: Request):
@@ -335,5 +449,5 @@ def ver_ajustes(request: Request):
 @app.post("/ajustes")
 async def guardar_ajustes(request: Request):
     form = await request.form()
-    db.guardar_ajustes({k: v for k, v in form.items()})
+    db.guardar_ajustes({k: v.replace("\r\n", "\n") for k, v in form.items()})
     return volver(request, "/ajustes", aviso="Ajustes guardados.")
