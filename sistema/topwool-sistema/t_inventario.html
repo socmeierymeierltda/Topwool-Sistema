@@ -1,0 +1,40 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Inventario</h1>
+<p class="sub">Sube el Informe de Inventario de Defontana del día. El sistema suma todas las bodegas, lo compara con el stock de la web y te deja actualizar los que no calzan.</p>
+
+<div class="tarjeta">
+  <form class="subir" method="post" action="/inventario/comparar" enctype="multipart/form-data">
+    <b>Inventario Defontana</b>
+    <input type="file" name="archivo" accept=".xlsx" required>
+    <button>Comparar con la web</button>
+  </form>
+  {% if fecha %}<p class="sub" style="margin:8px 0 0">Última comparación: {{ archivo }} · {{ fecha.strftime('%d-%m-%Y %H:%M') }}</p>{% endif %}
+</div>
+
+{% if total %}
+<div class="filtros">
+  <a class="boton {{ '' if solo=='dif' else 'sec' }}" href="?solo=dif">Con diferencia ({{ n_dif }})</a>
+  <a class="boton {{ '' if solo=='todos' else 'sec' }}" href="?solo=todos">Todos ({{ total }})</a>
+</div>
+{% if filas %}
+<form method="post" action="/inventario/actualizar">
+<div class="tabla-scroll"><table>
+<tr><th><input type="checkbox" onclick="document.querySelectorAll('.sel').forEach(c=>c.checked=this.checked)"></th>
+<th>Producto web</th><th>Código Defontana</th><th class="n">Saldo Defontana</th><th class="n">Stock web hoy</th><th class="n">Debería quedar</th></tr>
+{% for f in filas %}
+<tr class="{{ 'dif' if f.difiere }}">
+<td>{% if f.en_web %}<input class="sel" type="checkbox" name="ids" value="{{ f.woo_id }}" {{ 'checked' if f.difiere }}>{% endif %}</td>
+<td>{{ f.nombre }}<br><span class="sub" style="font-size:12px">{{ f.produccion }}{% if f.factor != 1 %} · bolsa 500 g{% endif %}</span></td>
+<td style="font-size:12px">{{ f.codigo }}</td>
+<td class="n">{{ f.saldo|num }}</td>
+<td class="n">{{ f.actual if f.actual is not none else ('—' if f.en_web else 'no está en la web') }}</td>
+<td class="n"><b>{{ f.deberia }}</b></td>
+</tr>
+{% endfor %}
+</table></div>
+<div class="acciones"><button>Actualizar stock en la web de los marcados</button></div>
+</form>
+{% else %}<div class="vacio">Todo calza: el stock de la web coincide con Defontana.</div>{% endif %}
+{% elif not fecha %}<div class="vacio">Sube el informe de inventario para ver las diferencias.</div>{% endif %}
+{% endblock %}

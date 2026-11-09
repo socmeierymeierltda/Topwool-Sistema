@@ -1,0 +1,42 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Equivalencias</h1>
+<p class="sub">Une cada producto de la web con su nombre de producción y su código en Defontana. 1 un = 1 ovillo de 100 g (o 50 g), k = kilo, b = bobina.</p>
+
+<div class="tarjeta">
+  <form class="subir" method="post" action="/equivalencias/subir" enctype="multipart/form-data">
+    <b>Cargar planilla</b>
+    <input type="file" name="archivo" accept=".xlsx" required>
+    <button>Subir y reemplazar</button>
+    <a class="boton sec" href="/equivalencias/descargar">Descargar actual</a>
+  </form>
+  <p class="sub" style="margin:8px 0 0">Usa el Excel de equivalencias (hoja "Equivalencias"). Al subirlo se reemplaza la tabla completa.</p>
+</div>
+
+<form class="filtros" method="get">
+  <input name="q" value="{{ q }}" placeholder="Buscar por nombre, SKU o código">
+  <select name="estado">
+    <option value="">Todos los estados</option>
+    {% for e in ['Revisar','Sugerido','Exacto','Revisado'] %}<option {{ 'selected' if estado==e }}>{{ e }}</option>{% endfor %}
+  </select>
+  <button class="sec">Filtrar</button>
+  <span class="sub" style="margin:0">{{ filas|length }} productos</span>
+</form>
+
+{% if filas %}
+<div class="tabla-scroll"><table>
+<tr><th>Nombre en la web</th><th>SKU web</th><th>Nombre producción</th><th>Unidad</th><th>Código Defontana</th><th>Estado</th><th></th></tr>
+{% for f in filas %}
+{% set fid = 'f' ~ f.id %}
+<tr>
+<td>{{ f.nombre_web }}</td><td style="font-size:12px">{{ f.sku }}</td>
+<td><input form="{{ fid }}" name="nombre_produccion" value="{{ f.nombre_produccion }}"></td>
+<td style="width:110px"><select form="{{ fid }}" name="unidad">{% for u in ['un','k','b','un 500g'] %}<option {{ 'selected' if u==f.unidad }}>{{ u }}</option>{% endfor %}</select></td>
+<td><input form="{{ fid }}" name="codigo_defontana" value="{{ f.codigo_defontana }}"></td>
+<td><span class="chip {{ 'otro' if (f.estado or '').startswith('Revisar') else 'transferencia' if (f.estado or '').startswith('Sugerido') else 'flow' }}">{{ (f.estado or '').split(' (')[0] }}</span></td>
+<td><form id="{{ fid }}" method="post" action="/equivalencias/{{ f.id }}"><input type="hidden" name="_q" value="{{ q }}"><button class="sec chico">Guardar</button></form></td>
+</tr>
+{% endfor %}
+</table></div>
+{% else %}<div class="vacio">No hay equivalencias{{ ' con ese filtro' if q or estado }}.</div>{% endif %}
+{% endblock %}

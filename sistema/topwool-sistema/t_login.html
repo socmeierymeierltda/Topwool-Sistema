@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sistema Topwool</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/estilo.css"></head>
+<body>
+<form class="login" method="post" action="/login">
+  <h1>TOPWOOL</h1>
+  <p class="sub">Pedidos, inventario y cobranza en un solo lugar.</p>
+  {% if error %}<div class="msg err">{{ error }}</div>{% endif %}
+  <div class="campo"><label for="clave">Clave</label><input id="clave" name="clave" type="password" autofocus required></div>
+  <div class="acciones"><button>Entrar</button></div>
+</form>
+</body></html>
