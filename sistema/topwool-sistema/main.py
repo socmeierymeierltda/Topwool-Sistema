@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select
 from starlette.middleware.sessions import SessionMiddleware
 
 import cobranza  # noqa: F401  (registra sus tablas)
+import seguimiento  # noqa: F401
 import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
 

@@ -216,6 +216,10 @@ def _avisar(s, d, aj):
                  "tracking": d.tracking, "link": link or "(consulta con la empresa de transporte)"}.items():
         texto = texto.replace("{" + k + "}", v or "")
     woo.nota_cliente(woo_id, texto)
+    try:   # el pedido web queda Completado (despachado)
+        woo.cambiar_estado(woo_id, "completed")
+    except Exception:  # noqa: BLE001
+        pass
     d.notificado = datetime.now()
     return True, ""
 
@@ -255,6 +259,30 @@ def avisar_todos(request: Request):
         s.commit()
     msg = f"Seguimiento enviado a {ok_n} clientes web."
     return _volver(request, "/cobranza", aviso=msg, error=("No se pudo: " + "; ".join(fallas)) if fallas else None)
+
+
+# ---------------- seguimiento de pedidos ----------------
+@router.get("/seguimiento", response_class=HTMLResponse)
+def seguimiento(request: Request, etapa: str = "", q: str = ""):
+    import seguimiento as sg
+    error = None
+    filas_ = []
+    if config.DEMO or not config.PEDIDOS_SHEET_ID:
+        error = "Para ver el seguimiento el sistema tiene que estar conectado al Drive de pedidos."
+    else:
+        try:
+            datos = sg.leer_drive()
+            with db.Session() as s:
+                filas_ = sg.actualizar(s, datos)
+                s.commit()
+        except Exception as e:  # noqa: BLE001
+            import sheets
+            error = f"No pude leer el Drive de pedidos. {sheets.error_claro(e)}"
+    conteo = {e: sum(1 for f in filas_ if f["etapa"] == e) for e in sg.ETAPAS}
+    vista = [f for f in filas_ if (not etapa or f["etapa"] == etapa)
+             and (not q or cb.norm(q) in cb.norm(f["cliente"] + " " + f["pedido"]))]
+    return _render(request, "seguimiento.html", filas=vista, conteo=conteo, etapas=sg.ETAPAS, etapa=etapa, q=q,
+                   error_drive=error)
 
 
 # ---------------- exportar y reportes ----------------

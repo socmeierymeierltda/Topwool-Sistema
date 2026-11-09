@@ -1,0 +1,31 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Seguimiento de pedidos</h1>
+<p class="sub">Lee el Drive de pedidos en vivo. Solo los que dicen <b>curacautin</b> están listos para producción; una fila con color ya se envió a producción; con documento en Cobranza está facturado, y con número de seguimiento, despachado.</p>
+{% if error_drive %}<div class="msg err">{{ error_drive }}</div>{% endif %}
+
+<div class="filtros">
+  <a class="boton {{ '' if not etapa else 'sec' }}" href="/seguimiento">Todos ({{ conteo.values()|sum }})</a>
+  {% for e in etapas %}<a class="boton {{ '' if etapa==e else 'sec' }}" href="/seguimiento?etapa={{ e }}">{{ e|capitalize }} ({{ conteo[e] }})</a>{% endfor %}
+</div>
+<form class="filtros" method="get"><input type="hidden" name="etapa" value="{{ etapa }}"><input name="q" value="{{ q }}" placeholder="Buscar cliente o producto" style="max-width:280px"><button class="sec">Buscar</button></form>
+
+{% if filas %}
+<div class="tabla-scroll"><table>
+<tr><th>Fila</th><th>Cliente</th><th>Pedido</th><th>Lugar</th><th>Vendedor</th><th>Etapa</th><th>Documento / despacho</th></tr>
+{% for f in filas %}
+<tr>
+<td>{{ f.fila }}{% if f.color %}<br><span title="color de la fila" style="display:inline-block;width:14px;height:14px;border-radius:4px;background:{{ f.color }};border:1px solid #0002"></span>{% endif %}</td>
+<td><b>{{ f.cliente }}</b>{% if f.comuna %}<br><span class="sub" style="font-size:12px">{{ f.comuna }}</span>{% endif %}</td>
+<td style="font-size:13px;max-width:360px">{{ f.pedido }}</td>
+<td>{{ f.lugar }}</td>
+<td>{{ f.vendedor }}</td>
+<td><span class="chip {{ 'flow' if f.etapa in ('facturado','despachado') else 'transferencia' if f.etapa in ('en producción','listo para producción') else '' }}">{{ f.etapa }}</span>
+  {% if f.dias is not none and f.etapa in ('listo para producción','en producción') %}<br><span class="sub" style="font-size:12px;{{ 'color:var(--rojo);font-weight:600' if f.dias >= 7 }}">hace {{ f.dias }} día{{ 's' if f.dias != 1 }}</span>{% endif %}</td>
+<td style="font-size:13px">{% if f.doc %}<a href="/cobranza/doc/{{ f.doc.id }}">{{ f.doc.tipo }} {{ f.doc.folio }}</a>{% if f.doc.tracking %}<br>{{ f.doc.empresa }} {{ f.doc.tracking }}{% endif %}{% else %}—{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+<p class="sub" style="margin-top:8px">"Hace X días" se cuenta desde que el sistema vio el pedido (o su color) por primera vez. En rojo: 7 días o más.</p>
+{% elif not error_drive %}<div class="vacio">No hay pedidos en esta etapa.</div>{% endif %}
+{% endblock %}
