@@ -1,0 +1,34 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Ajustes</h1>
+<p class="sub">Reglas con que se llenan los pedidos web. Puedes cambiarlas cuando quieras, sin tocar código.</p>
+
+<div class="tarjeta">
+  <b>Conexiones</b>
+  <div class="estado" style="margin-top:8px">
+  {% for k, v in estado.items() %}<span class="chip {{ 'flow' if v else 'otro' }}">{{ k }}: {{ 'conectado' if v else 'falta' }}</span>{% endfor %}
+  </div>
+  {% if correo %}<p class="sub" style="margin:10px 0 0">Comparte el Drive de pedidos (y luego el de cobranza) como Editor con: <b>{{ correo }}</b></p>{% endif %}
+</div>
+
+<form class="tarjeta" method="post" action="/ajustes">
+  <div class="grilla">
+    <div class="campo c3"><label>Prefijo del cliente</label><input name="prefijo_cliente" value="{{ aj.prefijo_cliente }}"></div>
+    <div class="campo c3"><label>Encargado</label><input name="encargado" value="{{ aj.encargado }}"></div>
+    <div class="campo c3"><label>Lugar de preparación</label><input name="lugar" value="{{ aj.lugar }}"></div>
+    <div class="campo c3"><label>Empresa por defecto</label><input name="empresa_defecto" value="{{ aj.empresa_defecto }}"></div>
+    <div class="campo c3"><label>Documento si paga con Flow</label><input name="doc_flow" value="{{ aj.doc_flow }}"></div>
+    <div class="campo c3"><label>Documento si es transferencia</label><input name="doc_transferencia" value="{{ aj.doc_transferencia }}"></div>
+    <div class="campo c6"><label>Comentario para transferencias</label><input name="comentario_transferencia" value="{{ aj.comentario_transferencia }}"></div>
+    <div class="campo c12"><label>Empresas de transporte (separadas por coma)</label><input name="empresas" value="{{ aj.empresas }}"></div>
+    <div class="campo c4"><label>Palabras que identifican Flow</label><input name="pago_flow" value="{{ aj.pago_flow }}"></div>
+    <div class="campo c4"><label>Palabras que identifican transferencia</label><input name="pago_transferencia" value="{{ aj.pago_transferencia }}"></div>
+    <div class="campo c4"><label>Estados de la web a revisar</label><input name="estados_woo" value="{{ aj.estados_woo }}"></div>
+    <div class="campo c12" style="margin-top:10px"><b>Correo para pedidos sin pagar</b> <span class="sub">Puedes usar {nombre}, {numero}, {total} y {productos}.</span></div>
+    <div class="campo c12"><label>Asunto</label><input name="correo_asunto" value="{{ aj.correo_asunto }}"></div>
+    <div class="campo c12"><label>Mensaje</label><textarea name="correo_cuerpo" rows="10">{{ aj.correo_cuerpo }}</textarea></div>
+    <div class="campo c4"><label>Estados "sin pagar" de la web</label><input name="estados_sin_pagar" value="{{ aj.estados_sin_pagar }}"></div>
+  </div>
+  <div class="acciones"><button>Guardar ajustes</button></div>
+</form>
+{% endblock %}
