@@ -12,14 +12,14 @@
 <div class="tarjeta">
   <form class="subir" method="post" action="/cobranza/subir" enctype="multipart/form-data">
     <b>Documentos del día</b>
-    <input type="file" name="archivos" accept=".pdf" multiple required>
-    <button>Subir PDF</button>
-    <span class="sub" style="margin:0">Facturas, boletas, pagos electrónicos y etiquetas FedEx / Blue, todos juntos.</span>
+    <input type="file" name="archivos" accept=".pdf,.zip" multiple required>
+    <button>Subir</button>
+    <span class="sub" style="margin:0">Selecciona todos los PDF del día juntos (Ctrl+A) o un .zip: facturas, boletas, pagos electrónicos y etiquetas FedEx / Blue.</span>
   </form>
   {% if n_revisar or por_avisar or sin_doc %}
   <div class="estado" style="margin-top:12px">
     {% if n_revisar %}<a class="chip otro" href="/cobranza?revisar=1">{{ n_revisar }} con cliente por revisar</a>{% endif %}
-    {% if por_avisar %}<form method="post" action="/cobranza/avisar-todos" style="display:inline" onsubmit="return confirm('¿Enviar el seguimiento por correo a {{ por_avisar }} clientes web?')"><button class="chico verde">Avisar despacho a {{ por_avisar }} clientes web</button></form>{% endif %}
+    {% if por_avisar %}<a class="boton chico verde" href="/despachos">{{ por_avisar }} paquetes con etiqueta esperando envío</a>{% endif %}
     {% if sin_doc %}<span class="chip transferencia">{{ sin_doc }} etiquetas sin documento todavía</span>{% endif %}
   </div>
   {% endif %}
@@ -68,7 +68,7 @@
   {% if d.revisar %}<br><span class="chip otro" style="margin-top:3px">revisar cliente</span>{% endif %}</td>
 <td>{{ d.tipo }} {{ d.folio or '' }}</td>
 <td>{{ d.vendedor or '' }}</td>
-<td style="font-size:13px">{{ d.empresa or '' }}{% if d.tracking %}<br><span class="sub" style="font-size:12px">{{ d.tracking }}{% if d.notificado %} · avisado{% endif %}</span>{% endif %}</td>
+<td style="font-size:13px">{{ d.empresa or '' }}{% if d.tracking %}<br><span class="sub" style="font-size:12px">{{ d.tracking }}{% if d.despachado %} · enviado{% else %} · por enviar{% endif %}{% if d.notificado %} · avisado{% endif %}</span>{% endif %}</td>
 <td class="n">{{ d.total|clp }}</td><td class="n">{{ x.pagado|clp }}</td><td class="n"><b>{{ x.debe|clp }}</b></td>
 <td><span class="chip {{ 'flow' if x.estado=='pagado' else 'transferencia' if x.estado=='abonado' else 'otro' }}">{{ x.estado }}</span></td>
 </tr>

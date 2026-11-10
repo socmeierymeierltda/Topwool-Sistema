@@ -1,16 +1,16 @@
 {% extends "t_base.html" %}
 {% block contenido %}
 <h1>Envío a producción</h1>
-<p class="sub">Pedidos del Drive que dicen <b>curacautin</b> y todavía no tienen color. Al enviarlos se arma el Excel (carta horizontal, sin lugar, comentario ni mail), se manda al correo de la impresora y las filas se pintan en el Drive con el color de esta tanda.</p>
+<p class="sub">Pedidos del Drive que dicen <b>curacautin</b> y todavía no tienen color. Al enviarlos se arma el Excel y/o PDF (carta horizontal, sin lugar, comentario ni mail), se manda al correo de la impresora y las filas se pintan en el Drive con el color de esta tanda.</p>
 {% if error_drive %}<div class="msg err">{{ error_drive }}</div>{% endif %}
-{% if descargar %}<div class="msg ok">Excel del envío listo: <a href="/produccion/{{ descargar }}/excel">descargar</a></div>{% endif %}
+{% if descargar %}<div class="msg ok">Archivos del envío: <a href="/produccion/{{ descargar }}/excel">Excel</a> · <a href="/produccion/{{ descargar }}/pdf">PDF</a></div>{% endif %}
 {% if not smtp %}<div class="msg demo">El correo todavía no está configurado: por ahora el Excel se descarga y lo envías tú. Para que salga solo, agrega SMTP_USER y SMTP_PASSWORD en Render (ver README).</div>{% endif %}
 
 <form method="post" action="/produccion/enviar" onsubmit="return confirm('¿Enviar a producción los pedidos marcados? Se pintarán en el Drive.')">
 <div class="cab">
   <b>Listos para enviar: {{ lista|length }}</b>
   <span class="sub" style="margin:0">Será el envío N° {{ numero }} de hoy · color <span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:{{ color }};border:1px solid #0002;vertical-align:middle"></span></span>
-  {% if lista %}<a class="boton sec chico" href="/produccion/vista-previa">Ver Excel antes</a>{% endif %}
+  {% if lista %}<a class="boton sec chico" href="/produccion/vista-previa">Ver Excel antes</a> <a class="boton sec chico" href="/produccion/vista-previa.pdf">Ver PDF antes</a>{% endif %}
 </div>
 {% if lista %}
 <div class="tabla-scroll"><table>
@@ -21,6 +21,8 @@
 {% endfor %}
 </table></div>
 <div class="acciones">
+  <label style="display:flex;gap:6px;align-items:center">Archivo:
+    <select name="formato" style="width:auto"><option value="ambos">Excel y PDF</option><option value="excel">Solo Excel</option><option value="pdf">Solo PDF</option></select></label>
   {% if smtp %}<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="correo" value="1" checked style="width:auto"> Enviar a {{ correo }}</label>{% endif %}
   <button class="verde">Enviar a producción</button>
 </div>
@@ -35,7 +37,7 @@
 <tr><td>{{ e.fecha.strftime('%d-%m-%Y %H:%M') }}</td><td>N° {{ e.numero_dia }}</td>
 <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:{{ e.color }};border:1px solid #0002"></span></td>
 <td class="n">{{ e.cantidad }}</td><td style="font-size:13px">{{ e.correo }}</td>
-<td><a class="boton sec chico" href="/produccion/{{ e.id }}/excel">Excel</a></td></tr>
+<td><a class="boton sec chico" href="/produccion/{{ e.id }}/excel">Excel</a> <a class="boton sec chico" href="/produccion/{{ e.id }}/pdf">PDF</a></td></tr>
 {% endfor %}
 </table></div>
 {% else %}<div class="vacio">Aún no hay envíos.</div>{% endif %}

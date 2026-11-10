@@ -105,8 +105,10 @@ def actualizar(s, filas):
             usados.add(doc.id)
         if not es_curacautin(f["lugar"]):
             etapa = "no listo"
-        elif doc and doc.tracking:
+        elif doc and doc.despachado:
             etapa = "despachado"
+        elif doc and doc.tracking:
+            etapa = "por despachar"
         elif doc:
             etapa = "facturado"
         elif f["color"]:
@@ -119,4 +121,4 @@ def actualizar(s, filas):
     return out
 
 
-ETAPAS = ["no listo", "listo para producción", "en producción", "facturado", "despachado"]
+ETAPAS = ["no listo", "listo para producción", "en producción", "facturado", "por despachar", "despachado"]

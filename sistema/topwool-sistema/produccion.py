@@ -17,6 +17,9 @@ PALETA = ["#c9daf8", "#d9ead3", "#fff2cc", "#f4cccc", "#d9d2e9", "#fce5cd", "#d0
           "#b6d7a8", "#ffe599", "#a4c2f4", "#ea9999"]
 
 
+from sqlalchemy.orm import deferred  # noqa: E402
+
+
 class EnvioProduccion(db.Base):
     __tablename__ = "envios_produccion"
     id = Column(Integer, primary_key=True)
@@ -26,7 +29,8 @@ class EnvioProduccion(db.Base):
     cantidad = Column(Integer)
     clientes = Column(Text)
     correo = Column(String(250))          # a quién se envió, o el error
-    excel = Column(LargeBinary)
+    excel = deferred(Column(LargeBinary))
+    pdf = deferred(Column(LargeBinary))
 
 
 def listos(filas):
@@ -46,7 +50,7 @@ def numero_del_dia(s):
 
 
 # Sin "Lugar de preparación", "Comentario" ni "Mail"
-COLS = [("cliente", "Cliente", 24), ("pedido", "Pedido", 62), ("telefono", "Teléfono", 12),
+COLS = [("cliente", "Cliente", 24), ("pedido", "Pedido", 58), ("telefono", "Teléfono", 15),
         ("direccion", "Dirección", 32), ("comuna", "Comuna", 15), ("vendedor", "Encargado", 10),
         ("doc", "Documento", 14), ("empresa", "Empresa", 11)]
 
@@ -92,7 +96,37 @@ def excel(filas, titulo) -> bytes:
     return buf.getvalue()
 
 
-def enviar_correo(destino, asunto, cuerpo, adjunto, nombre):
+def pdf(filas, titulo) -> bytes:
+    """Mismo contenido que el Excel, en PDF carta horizontal (para cuando no está la impresora)."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import landscape, letter
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from xml.sax.saxutils import escape
+    cols = [c for c in COLS if c[0] in ("cliente", "pedido") or any((f.get(c[0]) or "").strip() for f in filas)]
+    celda = ParagraphStyle("c", fontName="Helvetica", fontSize=8, leading=10)
+    cab = ParagraphStyle("h", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=colors.white)
+    ancho_total = landscape(letter)[0] - 1.6 * cm
+    suma = sum(c[2] for c in cols)
+    anchos = [ancho_total * c[2] / suma for c in cols]
+    data = [[Paragraph(c[1], cab) for c in cols]]
+    for f in filas:
+        data.append([Paragraph(escape(str(f.get(c[0], "") or "")), celda) for c in cols])
+    t = Table(data, colWidths=anchos, repeatRows=1)
+    t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5B4636")),
+                           ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#999999")),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(letter), leftMargin=0.8 * cm, rightMargin=0.8 * cm,
+                            topMargin=0.9 * cm, bottomMargin=0.9 * cm, title=titulo)
+    doc.build([Paragraph(f"<b>{escape(titulo)}</b>", ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=12)),
+               Spacer(1, 8), t])
+    return buf.getvalue()
+
+
+def enviar_correo(destino, asunto, cuerpo, adjuntos):
+    """adjuntos: lista de (nombre, bytes)."""
     if not (config.SMTP_USER and config.SMTP_PASSWORD):
         raise RuntimeError("falta configurar el correo (SMTP_USER y SMTP_PASSWORD en Render)")
     msg = EmailMessage()
@@ -100,8 +134,12 @@ def enviar_correo(destino, asunto, cuerpo, adjunto, nombre):
     msg["To"] = destino
     msg["Subject"] = asunto
     msg.set_content(cuerpo)
-    msg.add_attachment(adjunto, maintype="application",
-                       subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=nombre)
+    for nombre, datos in adjuntos:
+        if nombre.endswith(".pdf"):
+            msg.add_attachment(datos, maintype="application", subtype="pdf", filename=nombre)
+        else:
+            msg.add_attachment(datos, maintype="application",
+                               subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=nombre)
     with smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:
         smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
         smtp.send_message(msg)

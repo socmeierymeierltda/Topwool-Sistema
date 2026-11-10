@@ -63,8 +63,7 @@ def ver(request: Request, estado: str = "", vendedor: str = "", q: str = "", des
         sin_doc = s.scalar(select(func.count()).select_from(cb.Despacho).where(cb.Despacho.documento_id.is_(None)))
         n_revisar = s.scalar(select(func.count()).select_from(cb.Documento).where(cb.Documento.revisar != "", cb.Documento.revisar.is_not(None)))
         por_avisar = s.scalar(select(func.count()).select_from(cb.Documento).where(
-            cb.Documento.cliente.like("web%"), cb.Documento.tracking != "", cb.Documento.tracking.is_not(None),
-            cb.Documento.notificado.is_(None)))
+            cb.Documento.tracking != "", cb.Documento.tracking.is_not(None), cb.Documento.despachado.is_(None)))
     tot = {"total": sum(f["d"].total or 0 for f in lista), "pagado": sum(f["pagado"] for f in lista),
            "debe": sum(f["debe"] for f in lista)}
     por_vendedor = {}
@@ -84,11 +83,25 @@ async def subir(request: Request, archivos: list[UploadFile] = File(...)):
     nuevos, repetidos, despachos, malos = 0, 0, 0, []
     with db.Session() as s:
         datos = []
+        piezas = []
         for a in archivos:
+            contenido = await a.read()
+            if (a.filename or "").lower().endswith(".zip"):
+                import zipfile
+                try:
+                    with zipfile.ZipFile(io.BytesIO(contenido)) as z:
+                        for n in z.namelist():
+                            if n.lower().endswith(".pdf") and not n.startswith("__MACOSX"):
+                                piezas.append((n.split("/")[-1], z.read(n)))
+                except zipfile.BadZipFile:
+                    malos.append(a.filename)
+            else:
+                piezas.append((a.filename, contenido))
+        for nombre, contenido in piezas:
             try:
-                datos.append(cb.leer_pdf(await a.read(), a.filename))
+                datos.append(cb.leer_pdf(contenido, nombre))
             except Exception:  # noqa: BLE001
-                malos.append(a.filename)
+                malos.append(nombre)
         # primero documentos, después etiquetas (así se pueden unir)
         for d in [x for x in datos if x["clase"] == "documento"]:
             _, nuevo = cb.registrar_documento(s, d, aj)
@@ -229,6 +242,7 @@ def avisar(request: Request, did: int):
     aj = db.ajustes()
     with db.Session() as s:
         d = s.get(cb.Documento, did)
+        d.despachado = d.despachado or datetime.now()
         try:
             ok, motivo = _avisar(s, d, aj)
         except Exception as e:  # noqa: BLE001
@@ -239,6 +253,60 @@ def avisar(request: Request, did: int):
     return _volver(request, f"/cobranza/doc/{did}", aviso="Seguimiento enviado al cliente por correo desde la tienda.")
 
 
+# ---------------- despachos: se avisa solo cuando el paquete realmente salió ----------------
+@router.get("/despachos", response_class=HTMLResponse)
+def despachos(request: Request, ver: str = "pendientes"):
+    aj = db.ajustes()
+    with db.Session() as s:
+        st = select(cb.Documento).where(cb.Documento.tracking != "", cb.Documento.tracking.is_not(None))
+        if ver == "pendientes":
+            st = st.where(cb.Documento.despachado.is_(None)).order_by(cb.Documento.fecha)
+        else:
+            st = st.where(cb.Documento.despachado.is_not(None)).order_by(cb.Documento.despachado.desc()).limit(150)
+        docs = list(s.scalars(st))
+    hoy = date.today()
+    lista = [{"d": d, "link": cb.link_seguimiento(d.empresa, d.tracking, aj), "web": (d.cliente or "").startswith("web"),
+              "dias": (hoy - d.fecha).days if d.fecha else None} for d in docs]
+    return _render(request, "despachos.html", lista=lista, ver=ver)
+
+
+@router.post("/despachos/marcar")
+async def marcar_despachados(request: Request):
+    """Marca los paquetes elegidos como entregados al transporte y avisa a los clientes web."""
+    form = await request.form()
+    ids = [int(x) for x in form.getlist("ids")]
+    avisar_web = bool(form.get("avisar"))
+    if not ids:
+        return _volver(request, "/despachos", error="No elegiste paquetes.")
+    aj = db.ajustes()
+    ok_n, fallas = 0, []
+    with db.Session() as s:
+        for did in ids:
+            d = s.get(cb.Documento, did)
+            d.despachado = datetime.now()
+            if avisar_web and (d.cliente or "").startswith("web") and not d.notificado:
+                try:
+                    ok, motivo = _avisar(s, d, aj)
+                except Exception as e:  # noqa: BLE001
+                    ok, motivo = False, str(e)[:120]
+                if ok:
+                    ok_n += 1
+                else:
+                    fallas.append(f"{d.cliente} ({motivo})")
+        s.commit()
+    msg = f"{len(ids)} paquetes marcados como enviados"
+    msg += f"; se avisó a {ok_n} clientes web." if avisar_web else "."
+    return _volver(request, "/despachos", aviso=msg, error=("No se pudo avisar a: " + "; ".join(fallas)) if fallas else None)
+
+
+@router.post("/despachos/{did}/deshacer")
+def deshacer_despacho(request: Request, did: int):
+    with db.Session() as s:
+        s.get(cb.Documento, did).despachado = None
+        s.commit()
+    return _volver(request, "/despachos", aviso="Vuelve a quedar como pendiente de envío.")
+
+
 @router.post("/cobranza/avisar-todos")
 def avisar_todos(request: Request):
     aj = db.ajustes()
@@ -246,7 +314,7 @@ def avisar_todos(request: Request):
     with db.Session() as s:
         docs = list(s.scalars(select(cb.Documento).where(
             cb.Documento.cliente.like("web%"), cb.Documento.tracking != "", cb.Documento.tracking.is_not(None),
-            cb.Documento.notificado.is_(None))))
+            cb.Documento.despachado.is_not(None), cb.Documento.notificado.is_(None))))
         for d in docs:
             try:
                 ok, motivo = _avisar(s, d, aj)
@@ -332,14 +400,18 @@ async def enviar_produccion(request: Request):
     ahora = datetime.now()
     titulo = f"Envío a producción N° {numero} — {ahora:%d-%m-%Y %H:%M} — {len(filas_)} pedidos"
     contenido = pr.excel(filas_, titulo)
-    nombre = f"produccion_{ahora:%Y-%m-%d}_envio{numero}.xlsx"
+    contenido_pdf = pr.pdf(filas_, titulo)
+    base = f"produccion_{ahora:%Y-%m-%d}_envio{numero}"
+    formato = form.get("formato") or "ambos"
+    adjuntos = ([(base + ".xlsx", contenido)] if formato in ("excel", "ambos") else []) + \
+               ([(base + ".pdf", contenido_pdf)] if formato in ("pdf", "ambos") else [])
     destino = aj["correo_produccion"]
     estado_correo = ""
     if form.get("correo") and destino:
         try:
             pr.enviar_correo(destino, f"Pedidos a producción {ahora:%d-%m-%Y} - envío {numero}",
                              f"Se adjuntan {len(filas_)} pedidos para imprimir (carta horizontal).\n\n"
-                             + "\n".join(f"- {f['cliente']}" for f in filas_), contenido, nombre)
+                             + "\n".join(f"- {f['cliente']}" for f in filas_), adjuntos)
             estado_correo = destino
         except Exception as e:  # noqa: BLE001
             return _volver(request, "/produccion",
@@ -352,7 +424,7 @@ async def enviar_produccion(request: Request):
     with db.Session() as s:
         env = pr.EnvioProduccion(fecha=ahora, numero_dia=numero, color=color, cantidad=len(filas_),
                                  clientes=pr.resumen_clientes(filas_), correo=estado_correo or "solo descarga",
-                                 excel=contenido)
+                                 excel=contenido, pdf=contenido_pdf)
         s.add(env)
         s.commit()
         eid = env.id
@@ -373,12 +445,31 @@ def vista_previa():
     return _descarga(io.BytesIO(contenido), f"vista_previa_produccion_{date.today():%Y-%m-%d}", "xlsx")
 
 
-@router.get("/produccion/{eid}/excel")
-def excel_envio(eid: int):
+@router.get("/produccion/vista-previa.pdf")
+def vista_previa_pdf():
+    import produccion as pr
+    import seguimiento as sg
+    filas_ = pr.listos(sg.leer_drive())
+    contenido = pr.pdf(filas_, f"VISTA PREVIA — {datetime.now():%d-%m-%Y %H:%M} — {len(filas_)} pedidos")
+    return _descarga(io.BytesIO(contenido), f"vista_previa_produccion_{date.today():%Y-%m-%d}", "pdf")
+
+
+@router.get("/produccion/{eid}/{formato}")
+def archivo_envio(eid: int, formato: str):
     import produccion as pr
     with db.Session() as s:
         e = s.get(pr.EnvioProduccion, eid)
-        return _descarga(io.BytesIO(e.excel), f"produccion_{e.fecha:%Y-%m-%d}_envio{e.numero_dia}", "xlsx")
+        nombre = f"produccion_{e.fecha:%Y-%m-%d}_envio{e.numero_dia}"
+        if formato == "pdf":
+            datos = e.pdf
+            if not datos:   # envíos antiguos sin PDF guardado
+                import openpyxl
+                ws = openpyxl.load_workbook(io.BytesIO(e.excel)).active
+                filas_ = [dict(zip([k for k, _, _ in pr.COLS], [str(c.value or "") for c in r_]))
+                          for r_ in ws.iter_rows(min_row=3)]
+                datos = pr.pdf(filas_, str(ws["A1"].value or nombre))
+            return _descarga(io.BytesIO(datos), nombre, "pdf")
+        return _descarga(io.BytesIO(e.excel), nombre, "xlsx")
 
 
 # ---------------- exportar y reportes ----------------

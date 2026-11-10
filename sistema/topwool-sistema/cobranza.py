@@ -37,6 +37,7 @@ class Documento(db.Base):
     archivo = Column(String(250))
     revisar = Column(String(200))             # motivo si el cliente no es seguro
     notificado = Column(DateTime)
+    despachado = Column(DateTime)             # cuando el paquete se entregó al transporte
     creado = Column(DateTime, default=datetime.now)
 
 

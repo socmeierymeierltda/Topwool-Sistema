@@ -1,7 +1,7 @@
 {% extends "t_base.html" %}
 {% block contenido %}
 <h1>Seguimiento de pedidos</h1>
-<p class="sub">Lee el Drive de pedidos en vivo. Solo los que dicen <b>curacautin</b> están listos para producción; una fila con color ya se envió a producción; con documento en Cobranza está facturado, y con número de seguimiento, despachado.</p>
+<p class="sub">Lee el Drive de pedidos en vivo. Solo los que dicen <b>curacautin</b> están listos para producción; una fila con color ya se envió a producción; con documento en Cobranza está facturado, y con etiqueta, por despachar; y despachado cuando se marca como enviado en Despachos.</p>
 {% if error_drive %}<div class="msg err">{{ error_drive }}</div>{% endif %}
 
 <div class="filtros">
@@ -20,7 +20,7 @@
 <td style="font-size:13px;max-width:360px">{{ f.pedido }}</td>
 <td>{{ f.lugar }}</td>
 <td>{{ f.vendedor }}</td>
-<td><span class="chip {{ 'flow' if f.etapa in ('facturado','despachado') else 'transferencia' if f.etapa in ('en producción','listo para producción') else '' }}">{{ f.etapa }}</span>
+<td><span class="chip {{ 'flow' if f.etapa in ('facturado','despachado') else 'transferencia' if f.etapa in ('en producción','listo para producción','por despachar') else '' }}">{{ f.etapa }}</span>
   {% if f.dias is not none and f.etapa in ('listo para producción','en producción') %}<br><span class="sub" style="font-size:12px;{{ 'color:var(--rojo);font-weight:600' if f.dias >= 7 }}">hace {{ f.dias }} día{{ 's' if f.dias != 1 }}</span>{% endif %}</td>
 <td style="font-size:13px">{% if f.doc %}<a href="/cobranza/doc/{{ f.doc.id }}">{{ f.doc.tipo }} {{ f.doc.folio }}</a>{% if f.doc.tracking %}<br>{{ f.doc.empresa }} {{ f.doc.tracking }}{% endif %}{% else %}—{% endif %}</td>
 </tr>

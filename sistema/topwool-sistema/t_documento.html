@@ -28,9 +28,10 @@
 <div class="tarjeta">
   <b>Despacho</b>
   <p style="margin:6px 0">{{ d.empresa|title }} · {{ d.tracking }} {% if link %}· <a href="{{ link }}" target="_blank" rel="noopener">ver seguimiento</a>{% endif %}</p>
+  {% if d.despachado %}<span class="chip flow">Enviado el {{ d.despachado.strftime('%d-%m %H:%M') }}</span>{% else %}<span class="chip transferencia">Etiqueta lista, aún no enviado</span> <a href="/despachos">marcar en Despachos</a>{% endif %}
   {% if (d.cliente or '').startswith('web') %}
     {% if d.notificado %}<span class="chip flow">Cliente avisado el {{ d.notificado.strftime('%d-%m %H:%M') }}</span>{% endif %}
-    <form method="post" action="/cobranza/doc/{{ d.id }}/avisar" style="margin-top:8px"><button class="{{ 'sec' if d.notificado else 'verde' }} chico">{{ 'Avisar de nuevo' if d.notificado else 'Enviar seguimiento al cliente' }}</button></form>
+    <form method="post" action="/cobranza/doc/{{ d.id }}/avisar" style="margin-top:8px" onsubmit="return confirm('¿El paquete ya salió? Se avisará al cliente.')"><button class="{{ 'sec' if d.notificado else 'verde' }} chico">{{ 'Avisar de nuevo' if d.notificado else 'Ya salió: avisar al cliente' }}</button></form>
   {% endif %}
   {% for x in despachos %}<p class="sub" style="margin:6px 0 0;font-size:12px">Etiqueta: {{ x.archivo }}</p>{% endfor %}
 </div>

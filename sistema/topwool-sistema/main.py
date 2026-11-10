@@ -257,7 +257,8 @@ def _correo(order, aj, por_id, por_sku):
         asunto, cuerpo = aj["correo_asunto"], aj["correo_cuerpo"]
     para = bi.get("email", "")
     return {
-        "gmail": f"https://mail.google.com/mail/?view=cm&fs=1&to={quote(para)}&su={quote(asunto)}&body={quote(cuerpo)}",
+        "gmail": "https://mail.google.com/mail/?" + (f"authuser={quote(aj['correo_remitente'])}&" if aj.get("correo_remitente") else "")
+                 + f"view=cm&fs=1&to={quote(para)}&su={quote(asunto)}&body={quote(cuerpo)}",
         "mailto": f"mailto:{para}?subject={quote(asunto)}&body={quote(cuerpo)}",
         "para": para, "prep": prep,
     }

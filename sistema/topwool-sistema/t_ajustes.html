@@ -25,6 +25,7 @@
     <div class="campo c4"><label>Palabras que identifican transferencia</label><input name="pago_transferencia" value="{{ aj.pago_transferencia }}"></div>
     <div class="campo c4"><label>Estados de la web a revisar</label><input name="estados_woo" value="{{ aj.estados_woo }}"></div>
     <div class="campo c12" style="margin-top:10px"><b>Correo para pedidos sin pagar</b> <span class="sub">Puedes usar {nombre}, {numero}, {total} y {productos}.</span></div>
+    <div class="campo c6"><label>Escribir desde (cuenta de Gmail abierta en el navegador)</label><input name="correo_remitente" value="{{ aj.correo_remitente }}" placeholder="ej: contacto@topwool.cl"></div>
     <div class="campo c12"><label>Asunto</label><input name="correo_asunto" value="{{ aj.correo_asunto }}"></div>
     <div class="campo c12"><label>Mensaje</label><textarea name="correo_cuerpo" rows="10">{{ aj.correo_cuerpo }}</textarea></div>
     <div class="campo c12" style="margin-top:10px"><b>Producción</b></div>

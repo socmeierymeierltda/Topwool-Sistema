@@ -55,12 +55,17 @@ class Ajuste(Base):
 def init():
     Base.metadata.create_all(engine)
     # columnas agregadas después de la primera versión
-    with engine.begin() as cx:
-        for sql in ["ALTER TABLE pedidos_web ADD COLUMN contactado TIMESTAMP"]:
-            try:
+    pg = not config.DATABASE_URL.startswith("sqlite")
+    nuevas = [("pedidos_web", "contactado", "TIMESTAMP"),
+              ("documentos", "despachado", "TIMESTAMP"),
+              ("envios_produccion", "pdf", "BYTEA" if pg else "BLOB")]
+    for tabla, col, tipo in nuevas:
+        sql = f"ALTER TABLE {tabla} ADD COLUMN {'IF NOT EXISTS ' if pg else ''}{col} {tipo}"
+        try:
+            with engine.begin() as cx:   # una transacción por cambio
                 cx.exec_driver_sql(sql)
-            except Exception:  # ya existe
-                pass
+        except Exception:  # noqa: BLE001  ya existe
+            pass
 
 
 def ajustes() -> dict:

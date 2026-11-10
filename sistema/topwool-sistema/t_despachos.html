@@ -1,0 +1,35 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Despachos</h1>
+<p class="sub">La etiqueta se hace antes de que el paquete salga. Aquí marcas los que <b>realmente se entregaron</b> a FedEx, Blue u otro transporte; solo entonces se avisa al cliente web con su número de seguimiento y el pedido queda Completado en la web.</p>
+<div class="filtros">
+  <a class="boton {{ '' if ver=='pendientes' else 'sec' }}" href="/despachos">Con etiqueta, por enviar</a>
+  <a class="boton {{ '' if ver=='enviados' else 'sec' }}" href="/despachos?ver=enviados">Ya enviados</a>
+</div>
+{% if lista %}
+<form method="post" action="/despachos/marcar"{% if ver=='pendientes' %} onsubmit="return confirm('¿Estos paquetes ya se entregaron al transporte?')"{% endif %}>
+<div class="tabla-scroll"><table>
+<tr>{% if ver=='pendientes' %}<th><input type="checkbox" onclick="document.querySelectorAll('.sel').forEach(c=>c.checked=this.checked)"></th>{% endif %}
+<th>Cliente</th><th>Documento</th><th>Transporte</th><th>Seguimiento</th><th>{{ 'Etiqueta' if ver=='pendientes' else 'Enviado' }}</th>{% if ver!='pendientes' %}<th></th>{% endif %}</tr>
+{% for x in lista %}{% set d = x.d %}
+<tr>
+{% if ver=='pendientes' %}<td><input class="sel" type="checkbox" name="ids" value="{{ d.id }}"></td>{% endif %}
+<td><b>{{ d.cliente }}</b>{% if x.web %} <span class="chip">web</span>{% endif %}</td>
+<td><a href="/cobranza/doc/{{ d.id }}">{{ d.tipo }} {{ d.folio }}</a></td>
+<td>{{ d.empresa }}</td>
+<td>{% if x.link %}<a href="{{ x.link }}" target="_blank" rel="noopener">{{ d.tracking }}</a>{% else %}{{ d.tracking }}{% endif %}</td>
+<td>{% if ver=='pendientes' %}{{ d.fecha.strftime('%d-%m') if d.fecha }}{% if x.dias %} <span class="sub" style="font-size:12px">· hace {{ x.dias }} d</span>{% endif %}
+    {% else %}{{ d.despachado.strftime('%d-%m %H:%M') }}{% if x.web %}<br><span class="sub" style="font-size:12px">{{ 'avisado' if d.notificado else 'sin aviso' }}</span>{% endif %}{% endif %}</td>
+{% if ver!='pendientes' %}<td><button class="sec chico" formaction="/despachos/{{ d.id }}/deshacer" formnovalidate>Deshacer</button></td>{% endif %}
+</tr>
+{% endfor %}
+</table></div>
+{% if ver=='pendientes' %}
+<div class="acciones">
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="avisar" value="1" checked style="width:auto"> Avisar por correo a los clientes web</label>
+  <button class="verde">Marcar como enviados</button>
+</div>
+{% endif %}
+</form>
+{% else %}<div class="vacio">{{ 'No hay paquetes esperando envío.' if ver=='pendientes' else 'Aún no hay envíos marcados.' }}</div>{% endif %}
+{% endblock %}
