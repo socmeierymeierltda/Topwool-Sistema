@@ -14,12 +14,14 @@ from starlette.middleware.sessions import SessionMiddleware
 import cobranza  # noqa: F401  (registra sus tablas)
 import seguimiento  # noqa: F401
 import produccion  # noqa: F401
+import informes  # noqa: F401
 import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Sistema Topwool")
 tpl = Jinja2Templates(directory=BASE)
+tpl.env.globals["zip"] = zip
 tpl.env.filters["clp"] = lambda v: "$" + f"{float(v or 0):,.0f}".replace(",", ".")
 tpl.env.filters["num"] = lambda v: "" if v is None else (f"{v:,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", ".") if isinstance(v, float) else v)
 
@@ -71,7 +73,7 @@ def estilo():
 def estaticos(nombre: str):
     """Ícono y manifiesto para instalar el sistema en el teléfono."""
     tipos = {"icono-192.png": "image/png", "icono-512.png": "image/png", "icono-180.png": "image/png",
-             "manifest.json": "application/manifest+json"}
+             "manifest.json": "application/manifest+json", "chart.umd.js": "text/javascript"}
     if nombre not in tipos:
         return HTMLResponse("No encontrado", status_code=404)
     return FileResponse(BASE / nombre, media_type=tipos[nombre])

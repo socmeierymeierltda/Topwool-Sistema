@@ -1,0 +1,124 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<style>
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--papel);border:1px solid var(--linea);border-radius:var(--radio);padding:12px 14px}
+.kpi span{font-size:12px;color:var(--suave);text-transform:uppercase;letter-spacing:.04em;font-weight:600}
+.kpi b{display:block;font-size:24px;font-weight:800;margin-top:2px}
+.kpi small{color:var(--suave)}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.barra-in{height:8px;border-radius:4px;background:var(--acento);opacity:.75;min-width:2px}
+.grafico{position:relative;height:260px}
+@media (max-width:820px){.dos{grid-template-columns:1fr}.dos>*{min-width:0;overflow-x:auto}.kpi b{font-size:20px}.kpis{grid-template-columns:1fr 1fr}}
+</style>
+<h1>Informes de la tienda web</h1>
+<p class="sub">Lo que pasa en topwool.cl visto desde los pedidos: cuánto se vende, qué, a quién, dónde y cuándo. Solo cuenta pedidos completados o en proceso.</p>
+
+<div class="tarjeta">
+  <form class="filtros" method="get" style="margin:0">
+    <label class="sub" style="margin:0">Desde</label><input type="date" name="desde" value="{{ desde }}" style="max-width:160px">
+    <label class="sub" style="margin:0">Hasta</label><input type="date" name="hasta" value="{{ hasta }}" style="max-width:160px">
+    <button class="sec">Ver</button>
+    {% for n, d, h in atajos %}<a class="boton sec chico" href="?desde={{ d.isoformat() }}&hasta={{ h.isoformat() }}">{{ n }}</a>{% endfor %}
+  </form>
+  <div class="filtros" style="margin:10px 0 0">
+    <form method="post" action="/informes/sincronizar" style="display:inline"><button class="chico">Actualizar datos de la web</button></form>
+    {% if r %}<a class="boton sec chico" href="/informes/exportar?desde={{ desde }}&hasta={{ hasta }}">Descargar Excel</a>{% endif %}
+    <span class="sub" style="margin:0">{% if ult %}Datos hasta {{ ult.strftime('%d-%m-%Y %H:%M') }} · {{ r.n_historial if r }} pedidos guardados{% else %}Aún no se han traído los pedidos. La primera vez puede tardar uno o dos minutos.{% endif %}</span>
+  </div>
+</div>
+
+{% if r %}
+<div class="kpis">
+  <div class="kpi"><span>Ventas</span><b>{{ r.total|clp }}</b><small>envíos {{ r.envio|clp }}</small></div>
+  <div class="kpi"><span>Pedidos</span><b>{{ r.pedidos }}</b><small>ticket promedio {{ r.ticket|clp }}</small></div>
+  <div class="kpi"><span>Clientes</span><b>{{ r.clientes }}</b><small>{{ r.nuevos }} nuevos · {{ r.recurrentes }} vuelven</small></div>
+  <div class="kpi"><span>Compran más de una vez</span><b>{{ '%.0f'|format(r.repiten_pct) }}%</b><small>dentro del período</small></div>
+  <div class="kpi"><span>No concretados</span><b>{{ r.sin_concretar }}</b><small>{{ r.sin_concretar_monto|clp }} · {{ '%.0f'|format(r.tasa_no_concreta) }}% de los pedidos</small></div>
+  <div class="kpi"><span>Clientes dormidos</span><b>{{ r.dormidos }}</b><small>sin comprar hace +6 meses</small></div>
+</div>
+
+<div class="tarjeta">
+  <b>Ventas por mes</b>
+  <div class="grafico"><canvas id="gMes" aria-label="Ventas por mes" role="img"></canvas></div>
+</div>
+
+<div class="dos">
+  <div class="tarjeta"><b>Por familia de producto</b>
+    <table style="margin-top:8px"><tr><th>Familia</th><th class="n">Unid.</th><th class="n">Ventas</th><th style="width:30%"></th></tr>
+    {% set maxf = (r.top_fam[0][1][1] if r.top_fam else 1) or 1 %}
+    {% for k, v in r.top_fam[:15] %}<tr><td>{{ k }}</td><td class="n">{{ v[0]|num }}</td><td class="n">{{ v[1]|clp }}</td><td><div class="barra-in" style="width:{{ (100*v[1]/maxf)|round }}%"></div></td></tr>{% endfor %}
+    </table></div>
+  <div class="tarjeta"><b>Productos más vendidos</b>
+    <table style="margin-top:8px"><tr><th>Producto</th><th class="n">Unid.</th><th class="n">Ventas</th></tr>
+    {% for k, v in r.top_prod[:15] %}<tr><td style="font-size:13px">{{ k }}</td><td class="n">{{ v[0]|num }}</td><td class="n">{{ v[1]|clp }}</td></tr>{% endfor %}
+    </table></div>
+</div>
+
+<div class="tarjeta">
+  <b>Estacionalidad</b> <span class="sub">— venta promedio de cada mes del año, con todo el historial ({{ r.anios_historial }} año{{ 's' if r.anios_historial != 1 }}). Sirve para planear ofertas y qué potenciar.</span>
+  <div class="grafico"><canvas id="gEst" aria-label="Estacionalidad" role="img"></canvas></div>
+</div>
+
+<div class="dos">
+  <div class="tarjeta"><b>Se compran juntos</b> <span class="sub">— ideas para kits</span>
+    {% if r.juntos %}<table style="margin-top:8px"><tr><th>Combinación</th><th class="n">Pedidos</th></tr>
+    {% for (a, b), n in r.juntos %}<tr><td>{{ a }} + {{ b }}</td><td class="n">{{ n }}</td></tr>{% endfor %}</table>
+    {% else %}<p class="sub">Aún no hay suficientes pedidos con varios productos.</p>{% endif %}</div>
+  <div class="tarjeta"><b>Mejores clientes</b>
+    <table style="margin-top:8px"><tr><th>Cliente</th><th class="n">Pedidos</th><th class="n">Ventas</th><th>Última</th></tr>
+    {% for k, v in r.top_clientes[:12] %}<tr><td>{{ v[2] or k }}<br><span class="sub" style="font-size:12px">{{ k }}</span></td><td class="n">{{ v[1] }}</td><td class="n">{{ v[0]|clp }}</td><td>{{ v[3].strftime('%d-%m-%y') }}</td></tr>{% endfor %}
+    </table></div>
+</div>
+
+<div class="dos">
+  <div class="tarjeta"><b>Por región</b>
+    <table style="margin-top:8px"><tr><th>Región</th><th class="n">Pedidos</th><th class="n">Ventas</th><th style="width:30%"></th></tr>
+    {% set maxr = (r.regiones[0][1][0] if r.regiones else 1) or 1 %}
+    {% for k, v in r.regiones %}<tr><td>{{ k }}</td><td class="n">{{ v[1] }}</td><td class="n">{{ v[0]|clp }}</td><td><div class="barra-in" style="width:{{ (100*v[0]/maxr)|round }}%"></div></td></tr>{% endfor %}
+    </table></div>
+  <div class="tarjeta"><b>Comunas con más ventas</b>
+    <table style="margin-top:8px"><tr><th>Comuna</th><th class="n">Pedidos</th><th class="n">Ventas</th></tr>
+    {% for k, v in r.ciudades %}<tr><td>{{ k }}</td><td class="n">{{ v[1] }}</td><td class="n">{{ v[0]|clp }}</td></tr>{% endfor %}
+    </table></div>
+</div>
+
+<div class="dos">
+  <div class="tarjeta"><b>Medios de pago</b>
+    <table style="margin-top:8px"><tr><th>Medio</th><th class="n">Pedidos</th><th class="n">Ventas</th></tr>
+    {% for k, v in r.pagos %}<tr><td>{{ k }}</td><td class="n">{{ v[1] }}</td><td class="n">{{ v[0]|clp }}</td></tr>{% endfor %}
+    </table></div>
+  <div class="tarjeta"><b>Día de la semana</b> <span class="sub">— pedidos</span>
+    <table style="margin-top:8px">
+    {% set maxd = (r.dias|max) or 1 %}
+    {% for n, d in zip(['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'], r.dias) %}<tr><td style="width:90px">{{ n }}</td><td class="n" style="width:50px">{{ d }}</td><td><div class="barra-in" style="width:{{ (100*d/maxd)|round }}%"></div></td></tr>{% endfor %}
+    </table>
+    {% if r.cupones %}<p style="margin:12px 0 4px"><b>Cupones más usados</b></p>{% for c, n in r.cupones %}<span class="chip" style="margin:2px">{{ c }} · {{ n }}</span>{% endfor %}{% endif %}
+  </div>
+</div>
+
+<script src="/static/chart.umd.js"></script>
+<script>
+(function(){
+  if(!window.Chart) return;
+  const css = getComputedStyle(document.documentElement);
+  const color = css.getPropertyValue('--acento').trim() || '#b5562f';
+  const tinta = css.getPropertyValue('--suave').trim() || '#7a6a5d';
+  const linea = css.getPropertyValue('--linea').trim() || '#e6dccf';
+  const clp = v => '$' + Math.round(v).toLocaleString('es-CL');
+  const base = (labels, data, extra) => ({type:'bar', data:{labels, datasets:[{data, backgroundColor:color, borderRadius:4, maxBarThickness:42}]},
+    options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:(c)=> clp(c.parsed.y) + (extra ? ' · ' + extra[c.dataIndex] + ' pedidos' : '')}}},
+      scales:{x:{grid:{display:false}, ticks:{color:tinta}}, y:{grid:{color:linea}, border:{display:false},
+        ticks:{color:tinta, callback:v=> v>=1e6 ? '$'+(v/1e6).toLocaleString('es-CL',{maximumFractionDigits:1})+'M' : '$'+Math.round(v/1e3)+'k'}}}}});
+  const meses = {{ r.meses|tojson }};
+  new Chart(document.getElementById('gMes'), base(meses.map(m=>m.mes), meses.map(m=>m.total), meses.map(m=>m.n)));
+  new Chart(document.getElementById('gEst'), base(['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'], {{ r.estacionalidad|tojson }}));
+})();
+</script>
+{% elif ult %}
+<div class="vacio">No hay ventas en ese período.</div>
+{% else %}
+<div class="vacio">Aprieta <b>"Actualizar datos de la web"</b> para traer el historial de pedidos de topwool.cl.</div>
+{% endif %}
+{% endblock %}

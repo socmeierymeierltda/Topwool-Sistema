@@ -472,6 +472,81 @@ def archivo_envio(eid: int, formato: str):
         return _descarga(io.BytesIO(e.excel), nombre, "xlsx")
 
 
+# ---------------- informes de la tienda web ----------------
+def _rango(desde, hasta):
+    h = date.fromisoformat(hasta) if hasta else date.today()
+    d = date.fromisoformat(desde) if desde else date(h.year - 1, h.month, 1)
+    return d, h
+
+
+@router.get("/informes", response_class=HTMLResponse)
+def informes(request: Request, desde: str = "", hasta: str = ""):
+    import informes as inf
+    d, h = _rango(desde, hasta)
+    with db.Session() as s:
+        ult = inf.ultima_sync(s)
+        datos = inf.calcular(s, d, h) if ult else None
+    return _render(request, "informes.html", r=datos, desde=d.isoformat(), hasta=h.isoformat(), ult=ult,
+                   atajos=[("Últimos 12 meses", date(date.today().year - 1, date.today().month, 1), date.today()),
+                           ("Este año", date(date.today().year, 1, 1), date.today()),
+                           ("Año pasado", date(date.today().year - 1, 1, 1), date(date.today().year - 1, 12, 31)),
+                           ("Últimos 30 días", date.fromordinal(date.today().toordinal() - 30), date.today())])
+
+
+@router.post("/informes/sincronizar")
+def sincronizar_informes(request: Request):
+    import informes as inf
+    try:
+        with db.Session() as s:
+            n = inf.sincronizar(s)
+            s.commit()
+    except Exception as e:  # noqa: BLE001
+        return _volver(request, "/informes", error=f"No pude traer los pedidos de la web: {str(e)[:200]}")
+    return _volver(request, "/informes", aviso=f"Datos actualizados: {n} pedidos nuevos o modificados.")
+
+
+@router.get("/informes/exportar")
+def exportar_informes(desde: str = "", hasta: str = ""):
+    import openpyxl
+    from openpyxl.styles import Font
+
+    import informes as inf
+    d, h = _rango(desde, hasta)
+    with db.Session() as s:
+        r_ = inf.calcular(s, d, h)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Resumen"
+    for fila in [["Informe tienda web", f"{d:%d-%m-%Y} a {h:%d-%m-%Y}"], [],
+                 ["Ventas", r_["total"]], ["Pedidos", r_["pedidos"]], ["Ticket promedio", round(r_["ticket"])],
+                 ["Clientes", r_["clientes"]], ["Clientes nuevos", r_["nuevos"]], ["Clientes que vuelven", r_["recurrentes"]],
+                 ["% que compra más de una vez", round(r_["repiten_pct"], 1)], ["Pedidos no concretados", r_["sin_concretar"]],
+                 ["Monto no concretado", r_["sin_concretar_monto"]]]:
+        ws.append(fila)
+    ws["A1"].font = Font(bold=True, size=13)
+    hojas = [("Por mes", ["Mes", "Ventas", "Pedidos"], [[m["mes"], m["total"], m["n"]] for m in r_["meses"]]),
+             ("Productos", ["Producto", "Unidades", "Ventas", "Pedidos"], [[k, v[0], v[1], v[2]] for k, v in r_["top_prod"]]),
+             ("Familias", ["Familia", "Unidades", "Ventas"], [[k, v[0], v[1]] for k, v in r_["top_fam"]]),
+             ("Clientes", ["Cliente", "Email", "Ventas", "Pedidos", "Última compra"],
+              [[v[2], k, v[0], v[1], v[3]] for k, v in r_["top_clientes"]]),
+             ("Regiones", ["Región", "Ventas", "Pedidos"], [[k, v[0], v[1]] for k, v in r_["regiones"]]),
+             ("Comunas", ["Comuna", "Ventas", "Pedidos"], [[k, v[0], v[1]] for k, v in r_["ciudades"]]),
+             ("Medios de pago", ["Medio", "Ventas", "Pedidos"], [[k, v[0], v[1]] for k, v in r_["pagos"]]),
+             ("Estacionalidad", ["Mes", "Venta promedio"], [[m, v] for m, v in zip(inf.MESES, r_["estacionalidad"])])]
+    for nombre, cab, filas_ in hojas:
+        w = wb.create_sheet(nombre)
+        w.append(cab)
+        for c in w[1]:
+            c.font = Font(bold=True)
+        for f in filas_:
+            w.append(f)
+        w.column_dimensions["A"].width = 42
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return _descarga(buf, f"informe_web_{d:%Y-%m-%d}_{h:%Y-%m-%d}", "xlsx")
+
+
 # ---------------- exportar y reportes ----------------
 CABS = ["Fecha", "Días", "Cliente", "Documento", "Folio", "Vendedor", "Despacho", "Seguimiento",
         "Monto", "Flete", "Total", "Pagado", "Debe", "Estado", "Comentario"]

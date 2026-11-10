@@ -54,7 +54,7 @@ DEFAULTS = {
     # Estados de WooCommerce que se consideran pedidos nuevos
     "estados_woo": "processing, on-hold",
     # Pedidos sin pagar y recordatorios
-    "correo_remitente": "",
+    "correo_remitente": "contacto@topwool.cl",
     "estados_sin_pagar": "pending, on-hold",
     # Envío a producción
     "correo_produccion": "socmeierymeierltda@gmail.com",

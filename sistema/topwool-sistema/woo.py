@@ -31,6 +31,27 @@ def pedidos(estados):
     return out
 
 
+def historial(modificados_desde=None):
+    """Todos los pedidos (todos los estados), de a 100, para los informes."""
+    if config.DEMO:
+        from demo import historial_demo
+        yield from historial_demo()
+        return
+    params = {"per_page": 100, "orderby": "modified", "order": "asc", "status": "any"}
+    if modificados_desde:
+        params["modified_after"] = modificados_desde.strftime("%Y-%m-%dT%H:%M:%S")
+    with _client() as c:
+        page = 1
+        while True:
+            r = c.get("orders", params={**params, "page": page})
+            r.raise_for_status()
+            data = r.json()
+            yield from data
+            if len(data) < 100:
+                break
+            page += 1
+
+
 def agregar_nota(order_id, texto):
     if config.DEMO:
         return
