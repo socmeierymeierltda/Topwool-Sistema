@@ -351,6 +351,8 @@ def importar_planilla(s, contenido: bytes) -> int:
             if r and r[0] and len(r) > 1 and r[1]:
                 enc[norm(str(r[0]))] = str(r[1]).strip().lower()
     previos = {(d.folio, d.cliente, d.total) for d in s.scalars(select(Documento).where(Documento.origen == "planilla"))}
+    # documentos que ya se subieron en PDF: misma venta si coincide el folio y el total
+    por_pdf = {(d.folio, d.total) for d in s.scalars(select(Documento).where(Documento.origen == "pdf"))}
     n = 0
     for r in filas[cab_i + 1:]:
         cliente = col(r, "CLIENTE")
@@ -367,6 +369,8 @@ def importar_planilla(s, contenido: bytes) -> int:
         monto, flete = num(col(r, "MONTO")), num(col(r, "FLETE"))
         total = num(col(r, "TOTAL")) or monto + flete
         if (folio, norm(str(cliente)), total) in previos:   # ya importado antes
+            continue
+        if folio and (folio, total) in por_pdf:              # ya está desde su PDF
             continue
         doc_txt = str(col(r, "DOCUMENTO") or "").strip().lower()
         doc = Documento(tipo="importado" if doc_txt in ("", "#n/a") else doc_txt[:20], folio=folio, fecha=fecha,

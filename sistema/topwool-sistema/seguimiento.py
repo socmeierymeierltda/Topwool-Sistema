@@ -67,6 +67,40 @@ def leer_drive():
     return filas_desde_grilla(data)
 
 
+def nombre_base(t):
+    """'web - Francisca Cabrera' / 'web francisca cabrera' / 'Francisca Cabrera' → 'francisca cabrera'."""
+    n = cb.norm(t)
+    for p in ("web - ", "web -", "web "):
+        if n.startswith(p):
+            n = n[len(p):]
+    return n.strip(" -")
+
+
+def parecido(a, b) -> float:
+    a, b = nombre_base(a), nombre_base(b)
+    if not a or not b:
+        return 0
+    if a == b:
+        return 1
+    ta, tb = set(a.split()), set(b.split())
+    # "francisca cabrera" dentro de "francisca cabrera rojas" (al menos nombre y apellido)
+    if min(len(ta), len(tb)) >= 2 and (ta <= tb or tb <= ta):
+        return 0.95
+    r = difflib.SequenceMatcher(None, " ".join(sorted(ta)), " ".join(sorted(tb))).ratio()
+    # solo errores de tipeo muy pequeños ("cabrea" por "cabrera"), no "francisca" vs "francisco"
+    return r if r >= 0.96 else r * 0.9
+
+
+def mejor_documento(cliente, candidatos):
+    """El documento más antiguo cuyo cliente se parece lo suficiente (también mira la razón social)."""
+    mejor, puntaje = None, 0
+    for d in candidatos:
+        p = max(parecido(cliente, d.cliente or ""), parecido(cliente, d.razon_social or "") - 0.03)
+        if p >= 0.88 and p > puntaje + 0.01:
+            mejor, puntaje = d, p
+    return mejor
+
+
 def clave(f):
     return hashlib.sha1("|".join(cb.norm(f[k]) for k in ("cliente", "pedido")).encode()).hexdigest()
 
@@ -75,7 +109,9 @@ def actualizar(s, filas):
     """Guarda lo visto y une con documentos. Devuelve la lista con la etapa de cada pedido."""
     ahora = datetime.now()
     out = []
-    usados = set()
+    # documentos ya unidos a otro pedido no se vuelven a usar
+    usados = {x for (x,) in s.execute(select(FilaDrive.documento_id).where(FilaDrive.documento_id.is_not(None)))}
+    cands_cache = None
     for f in filas:
         k = clave(f)
         r = s.get(FilaDrive, k)
@@ -91,14 +127,12 @@ def actualizar(s, filas):
         r.color = f["color"]
         doc = s.get(cb.Documento, r.documento_id) if r.documento_id else None
         if not doc and es_curacautin(f["lugar"]):
-            nombre = cb.norm(f["cliente"])
-            if nombre.startswith("web ") and not nombre.startswith("web - "):
-                nombre = "web - " + nombre[4:]
-            # documentos emitidos hasta 15 días antes de que el sistema viera el pedido (carga inicial)
-            desde = ((r.visto_desde or ahora) - timedelta(days=15)).date()
-            cands = s.scalars(select(cb.Documento).where(cb.Documento.cliente == nombre, cb.Documento.fecha >= desde)
-                              .order_by(cb.Documento.fecha))
-            doc = next((d for d in cands if d.id not in usados), None)
+            # documentos emitidos desde 30 días antes de que el sistema viera el pedido
+            desde = ((r.visto_desde or ahora) - timedelta(days=30)).date()
+            if cands_cache is None:
+                cands_cache = list(s.scalars(select(cb.Documento).where(cb.Documento.fecha >= desde)
+                                             .order_by(cb.Documento.fecha)))
+            doc = mejor_documento(f["cliente"], [d for d in cands_cache if d.id not in usados and d.fecha and d.fecha >= desde])
             if doc:
                 r.documento_id = doc.id
         if doc:
