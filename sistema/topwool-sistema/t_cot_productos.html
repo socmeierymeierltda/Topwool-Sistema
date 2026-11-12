@@ -17,7 +17,7 @@
 {% for p in prods %}
 <tr>
 <td><input type="hidden" name="cod" value="{{ p.codigo }}"><input type="checkbox" name="vis_{{ p.codigo }}" value="1" {{ 'checked' if p.visible }} style="width:auto"></td>
-<td style="font-size:12px">{{ p.codigo }}</td><td>{{ p.nombre }}</td>
+<td style="font-size:12px">{{ p.codigo }}</td><td>{{ p.nombre or "" }}{% if not p.nombre %}<span class="sub" style="font-size:12px">sin nombre (sube el inventario)</span>{% endif %}{% if p.precio_detalle and p.precio_mayor and p.precio_detalle < p.precio_mayor %} <span class="chip otro">detalle menor que mayor</span>{% endif %}</td>
 <td><select name="tipo_{{ p.codigo }}">{% for k, et in tipos %}<option value="{{ k }}" {{ 'selected' if tipo_normal(p.tipo)==k }}>{{ et }}</option>{% endfor %}</select></td>
 <td><input name="fam_{{ p.codigo }}" value="{{ p.familia or '' }}" style="width:110px"></td>
 <td><select name="unidad_{{ p.codigo }}"><option value="kg" {{ 'selected' if p.unidad=='kg' }}>kg</option><option value="un" {{ 'selected' if p.unidad=='un' }}>un</option></select></td>

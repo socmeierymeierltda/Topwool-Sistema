@@ -41,6 +41,7 @@
     <div class="campo c12" style="margin-top:10px"><b>Cotizador</b> <span class="sub">Mínimos para precio por mayor (lista Base); bajo eso, Base detalle.</span></div>
     {% for k, d in reglas %}<div class="campo c4"><label>{{ d }}</label><input name="{{ k }}" value="{{ aj[k] }}"></div>
     {% endfor %}
+    <div class="campo c12"><label>Líneas (familias) según el comienzo del código Defontana — los ovillos CH… usan la misma línea que el granel H…</label><input name="cot_lineas" value="{{ aj.cot_lineas }}"></div>
   </div>
   <div class="acciones"><button>Guardar ajustes</button></div>
 </form>

@@ -65,6 +65,9 @@ DEFAULTS = {
     "cot_kg_corriedale": "10", "cot_kg_merino": "5", "cot_kg_hilado_surtido": "10",
     "cot_kg_vellon_natural": "10", "cot_kg_tenido": "5", "cot_kg_tenido_surtido": "10",
     "cot_un_bolsa": "10", "cot_un_familia": "50", "cot_un_surtido": "100",
+    "cot_lineas": ("HIMDK24.5, HIMDK, HIMSOCKS, HIMSLDK, HIMSF, HIMC, HIMF, HIMA, HIME, HIMMMA, HIMRM, "
+                   "HICDK, HICDF, HICF, HILLAIMA, HILONQUIMAY, HIALGODON, HIR, HIL, HIP, HIT, HIA, HIE, "
+                   "HAHM, HAC, HAF, HAH, HAP, COVT50, CO"),
     "link_fedex": "https://www.fedex.com/fedextrack/?trknbr={n}",
     "link_blue": "https://www.blue.cl/seguimiento/?n_seguimiento={n}",
     "link_starken": "https://www.starken.cl/seguimiento?codigo={n}",

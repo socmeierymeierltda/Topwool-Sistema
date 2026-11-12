@@ -6,15 +6,17 @@
 <div class="grilla" style="margin-bottom:6px">
   <div class="tarjeta c6">
     <b>1. Lista de precios</b>
-    <p class="sub" style="margin:4px 0 10px">Excel de Defontana con las listas <b>Base</b> (por mayor) y <b>Base detalle</b>. Súbelo cuando cambien los precios.</p>
-    <form class="subir" method="post" action="/cotizaciones/precios" enctype="multipart/form-data">
-      <input type="file" name="archivo" accept=".xlsx" required> <button>Cargar precios</button>
+    <p class="sub" style="margin:4px 0 10px">Los dos Excel de Defontana (código y precio). Puedes subir uno solo si cambió solo esa lista.</p>
+    <form method="post" action="/cotizaciones/precios" enctype="multipart/form-data">
+      <div class="subir"><b style="min-width:150px">Base (por mayor)</b><input type="file" name="base" accept=".xlsx"></div>
+      <div class="subir" style="margin-top:6px"><b style="min-width:150px">Base detalle</b><input type="file" name="detalle" accept=".xlsx"></div>
+      <div class="acciones" style="justify-content:flex-start"><button>Cargar precios</button></div>
     </form>
     <p class="sub" style="margin:8px 0 0;font-size:13px">{{ n_vis }} de {{ n_prod }} productos visibles{% if ult_precios %} · última carga {{ ult_precios.strftime('%d-%m-%Y %H:%M') }}{% endif %} · <a href="/cotizaciones/productos">revisar productos</a></p>
   </div>
   <div class="tarjeta c6">
     <b>2. Stock</b>
-    <p class="sub" style="margin:4px 0 10px">Informe de Inventario de Defontana (el mismo de la pestaña Inventario; si lo subes allá, se actualiza aquí también).</p>
+    <p class="sub" style="margin:4px 0 10px">Informe de Inventario de Defontana (el mismo de la pestaña Inventario; si lo subes allá, se actualiza aquí también). De aquí salen también los <b>nombres</b> de los productos.</p>
     <form class="subir" method="post" action="/cotizaciones/stock" enctype="multipart/form-data">
       <input type="file" name="archivo" accept=".xlsx" required> <button>Cargar stock</button>
     </form>

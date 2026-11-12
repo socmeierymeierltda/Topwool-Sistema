@@ -448,12 +448,14 @@ async def comparar_inventario(request: Request, archivo: UploadFile = File(...))
     if _ocupado():
         return volver(request, "/inventario", error="Ya hay una tarea en curso; espera a que termine.")
     try:
-        saldos = inventario.leer_inventario_defontana(await archivo.read())
+        contenido = await archivo.read()
+        saldos = inventario.leer_inventario_defontana(contenido)
     except Exception as e:  # noqa: BLE001
         return volver(request, "/inventario", error=f"No pude leer el archivo de Defontana: {e}")
     nombre = archivo.filename
     try:
-        cotizador.guardar_stock(saldos)   # el cotizador usa el mismo informe
+        cotizador.guardar_stock(saldos)   # el cotizador usa el mismo informe (stock y nombres)
+        cotizador.guardar_nombres(cotizador.leer_nombres(contenido))
     except Exception:  # noqa: BLE001
         traceback.print_exc()
 

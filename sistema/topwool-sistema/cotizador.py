@@ -129,104 +129,182 @@ def adivinar_familia(nombre: str) -> str:
     return ""
 
 
-def clasificar(codigo: str, nombre: str):
-    """Adivina tipo, unidad y familia; se corrige a mano en la pantalla de productos."""
+def _merino(codigo, nombre):
     n = norm(nombre)
-    if "vell" in n:
-        tipo = "vellon_tenido" if any(p in n for p in ("teni", "color")) else "vellon_natural"
-    elif "merino" in n or "sock" in n:
-        tipo = "hilado_merino"
-    elif any(p in n for p in ("hilad", "lana", "ovillo", "hilo", "corriedale", "algod")):
-        tipo = "hilado_corriedale"
-    else:
-        tipo = "otro"
+    if n:
+        return "merino" in n or "sock" in n
+    c = codigo.upper().lstrip("C")   # sin nombre: hilados merino de Defontana empiezan con HIM + C/DK/F/S
+    return bool(re.match(r"HIM(C|DK|F|SF|SLDK|SOCKS)", c))
+
+
+def clasificar(codigo: str, nombre: str = ""):
+    """Tipo, unidad, kilos por unidad y visibilidad según el código de Defontana (y el nombre si lo hay).
+
+    HI / HA  → hilado por kilo (granel)            CH… / CO…100 → ovillos de 100 g (cordonería)
+    COVT50…  → ovillos de vellón teñido de 50 g    VPT… → vellón teñido · VP… / VCN → vellón natural
+    El resto (accesorios, tejidos, ofertas…) queda como "otro" y oculto.
+    """
     c = (codigo or "").upper()
-    fam = adivinar_familia(nombre)
-    if c.endswith("100"):
-        return tipo, "un", 0.1, fam
-    if c.endswith("50"):
-        return tipo, "un", 0.05, fam
-    return tipo, "kg", 1.0, fam
+    n = norm(nombre)
+    if c.startswith("COVT50"):
+        return "vellon_tenido", "un", 0.05, True
+    if c.startswith("CH") or (c.startswith("CO") and c.endswith("100")):
+        return ("hilado_merino" if _merino(c, nombre) else "hilado_corriedale"), "un", 0.1, True
+    if c.startswith(("HI", "HA")):
+        return ("hilado_merino" if _merino(c, nombre) else "hilado_corriedale"), "kg", 1.0, True
+    if c.startswith("VPT"):
+        return "vellon_tenido", "kg", 1.0, True
+    if c.startswith("VP") or c == "VCN":
+        return "vellon_natural", "kg", 1.0, True
+    if "vell" in n:
+        return ("vellon_tenido" if "teni" in n else "vellon_natural"), "kg", 1.0, True
+    return "otro", "kg", 1.0, False
+
+
+LINEAS_DEFECTO = ("HIMDK24.5, HIMDK, HIMSOCKS, HIMSLDK, HIMSF, HIMC, HIMF, HIMA, HIME, HIMMMA, HIMRM, "
+                  "HICDK, HICDF, HICF, HILLAIMA, HILONQUIMAY, HIALGODON, HIR, HIL, HIP, HIT, HIA, HIE, "
+                  "HAHM, HAC, HAF, HAH, HAP, COVT50, CO")
+
+
+def familia_codigo(codigo: str, lineas: str = LINEAS_DEFECTO) -> str:
+    """Familia (línea) según el comienzo del código. Los ovillos (CH…) usan la misma línea que el granel (H…):
+    CHIMANEGRO100 → HIMA (Malal), CHIMDK24.5MOSTAZA100 → HIMDK24.5. Las líneas se editan en Ajustes."""
+    c = codigo.upper()
+    base = c[1:] if c.startswith("CH") else c
+    pref = sorted({x.strip().upper() for x in (lineas or "").split(",") if x.strip()}, key=len, reverse=True)
+    for x in pref:
+        if base.startswith(x) or c.startswith(x):
+            return x
+    return re.sub(r"(100|10)$", "", base)
 
 
 # ---------- lista de precios ----------
-def leer_lista_precios(contenido: bytes):
-    """Excel exportado de Defontana con las listas Base y Base detalle.
-
-    Acepta dos formas:
-      a) una fila por producto, con columnas 'Base' y 'Base detalle';
-      b) una fila por producto y lista, con una columna 'Lista' y otra 'Precio'.
-    """
+def _leer_hoja(contenido: bytes):
     wb = openpyxl.load_workbook(io.BytesIO(contenido), read_only=True, data_only=True)
-    productos = {}
-    for ws in wb.worksheets:
-        enc = None
-        for r in ws.iter_rows(values_only=True):
-            celdas = [norm(x) for x in (r or ())]
-            if enc is None:
-                if any(c.startswith("codigo") or c == "cod" or c == "sku" for c in celdas) and \
-                   any("base" in c or "precio" in c or "lista" in c for c in celdas):
-                    enc = celdas
-                continue
-            if not r or not any(r):
-                continue
-            fila = dict(zip(enc, r))
-            col = lambda *pref: next((fila[k] for k in enc if k and any(k.startswith(p) for p in pref)), None)  # noqa: E731
-            codigo = str(col("codigo", "cod", "sku") or "").strip().upper()
-            if not codigo or codigo.startswith("TOTAL"):
-                continue
-            nombre = str(col("descripcion", "nombre", "detalle", "articulo", "producto", "glosa") or "").strip()
-            p = productos.setdefault(codigo, {"codigo": codigo, "nombre": nombre, "mayor": None, "detalle": None})
-            if nombre and not p["nombre"]:
-                p["nombre"] = nombre
-            base_det = next((k for k in enc if k and "base" in k and "detalle" in k), None)
-            base = next((k for k in enc if k and "base" in k and "detalle" not in k), None)
-            if base or base_det:
-                if base_det and _num(fila.get(base_det)) is not None:
-                    p["detalle"] = _num(fila.get(base_det))
-                if base and _num(fila.get(base)) is not None:
-                    p["mayor"] = _num(fila.get(base))
-            else:
-                lista = norm(col("lista", "nombre lista") or "")
-                precio = _num(col("precio", "valor", "neto"))
-                if precio is None:
-                    continue
-                if "detalle" in lista:
-                    p["detalle"] = precio
-                elif "base" in lista:
-                    p["mayor"] = precio
-        if productos:
-            break
-    if not productos:
-        raise ValueError("No encontré una fila de encabezados con 'Código' y las columnas de precio "
-                         "('Base' y 'Base detalle'). ¿Es la lista de precios de Defontana?")
-    return list(productos.values())
+    ws = wb.worksheets[0]
+    filas = list(ws.iter_rows(values_only=True))
+    for i, r in enumerate(filas[:30]):
+        celdas = [norm(x) for x in (r or ())]
+        if any(c.startswith("codigo") or c in ("cod", "sku") for c in celdas):
+            return celdas, filas[i + 1:]
+    raise ValueError("No encontré la columna 'Código'.")
 
 
-def guardar_lista(items):
+def leer_lista(contenido: bytes):
+    """Lista de Defontana con columnas Código y Precio → {codigo: precio neto}. Ignora precios en 0."""
+    enc, filas = _leer_hoja(contenido)
+    i_cod = next(i for i, c in enumerate(enc) if c.startswith("codigo") or c in ("cod", "sku"))
+    i_pre = next((i for i, c in enumerate(enc) if "precio" in c or c in ("valor", "neto")), None)
+    if i_pre is None:
+        raise ValueError("No encontré la columna 'Precio'.")
+    out = {}
+    for r in filas:
+        if not r or len(r) <= max(i_cod, i_pre) or not r[i_cod]:
+            continue
+        precio = _num(r[i_pre])
+        if precio:
+            out[str(r[i_cod]).strip().upper()] = precio
+    return out
+
+
+def leer_nombres(contenido: bytes):
+    """Informe de Inventario u otro Excel de Defontana con código y descripción → {codigo: nombre}."""
+    try:
+        enc, filas = _leer_hoja(contenido)
+    except ValueError:
+        return {}
+    i_cod = next(i for i, c in enumerate(enc) if c.startswith("codigo") or c in ("cod", "sku"))
+    i_nom = next((i for i, c in enumerate(enc) if i != i_cod and
+                  (c.startswith("descrip") or c.startswith("nombre") or c.startswith("detalle")
+                   or (c.startswith("articulo") and "codigo" not in c))), None)
+    if i_nom is None:
+        return {}
+    out = {}
+    for r in filas:
+        if r and len(r) > max(i_cod, i_nom) and r[i_cod] and r[i_nom]:
+            out[str(r[i_cod]).strip().upper()] = str(r[i_nom]).strip()
+    return out
+
+
+def nombres_equivalencias():
+    """Nombres que ya están en la tabla de Equivalencias (código Defontana → nombre web)."""
+    out = {}
+    with db.Session() as s:
+        for e in s.scalars(select(db.Equivalencia)):
+            if e.codigo_defontana and (e.nombre_web or e.nombre_produccion):
+                out.setdefault(e.codigo_defontana.strip().upper(), e.nombre_web or e.nombre_produccion)
+    return out
+
+
+def guardar_precios(base: dict | None, detalle: dict | None):
+    """Actualiza la lista Base (por mayor) y/o Base detalle. Una lista que no se sube no se toca."""
     ahora = datetime.now()
-    nuevos = cambiados = 0
+    nuevos = 0
+    nombres = nombres_equivalencias()
     with db.Session() as s:
         actuales = {p.codigo: p for p in s.scalars(select(Producto))}
-        for it in items:
-            p = actuales.get(it["codigo"])
+        codigos = set(base or {}) | set(detalle or {})
+        for cod in codigos:
+            p = actuales.get(cod)
             if p is None:
-                tipo, unidad, peso, fam = clasificar(it["codigo"], it["nombre"])
-                p = Producto(codigo=it["codigo"], tipo=tipo, unidad=unidad, peso_kg=peso, familia=fam,
-                             visible=True, editado=False)
+                p = Producto(codigo=cod, editado=False)
                 s.add(p)
+                actuales[cod] = p
                 nuevos += 1
-            else:
-                cambiados += 1
-            if it["nombre"]:
-                p.nombre = it["nombre"]
-            if it["mayor"] is not None:
-                p.precio_mayor = it["mayor"]
-            if it["detalle"] is not None:
-                p.precio_detalle = it["detalle"]
+            if base is not None:
+                p.precio_mayor = base.get(cod)
+            if detalle is not None:
+                p.precio_detalle = detalle.get(cod)
+            if not p.nombre and cod in nombres:
+                p.nombre = nombres[cod]
             p.actualizado = ahora
+        if base is not None:
+            for cod, p in actuales.items():
+                if cod not in codigos:
+                    p.precio_mayor = None
+        if detalle is not None:
+            for cod, p in actuales.items():
+                if cod not in codigos:
+                    p.precio_detalle = None
+        s.flush()
+        _reclasificar(s, actuales.values())
         s.commit()
-    return nuevos, cambiados
+    return nuevos, len(codigos)
+
+
+def _reclasificar(s, prods):
+    """Tipo, unidad, visibilidad y familia para los productos que no se han editado a mano."""
+    prods = list(prods)
+    lineas = db.ajustes().get("cot_lineas", LINEAS_DEFECTO)
+    for p in prods:
+        if p.editado:
+            continue
+        tipo, unidad, peso, visible = clasificar(p.codigo, p.nombre or "")
+        p.tipo, p.unidad, p.peso_kg = tipo, unidad, peso
+        p.visible = visible and bool(p.precio_mayor or p.precio_detalle)
+        p.familia = familia_codigo(p.codigo, lineas)
+
+
+def guardar_nombres(nombres: dict):
+    """Pone nombre a los productos del cotizador (desde el Informe de Inventario)."""
+    if not nombres:
+        return 0
+    n = 0
+    with db.Session() as s:
+        prods = list(s.scalars(select(Producto)))
+        for p in prods:
+            nom = nombres.get(p.codigo)
+            if nom and nom != p.nombre:
+                p.nombre = nom
+                n += 1
+        if n:
+            _reclasificar(s, prods)
+        s.commit()
+    return n
+
+
+def nombre_visible(p):
+    return p.nombre or p.codigo
 
 
 def guardar_stock(saldos: dict):
@@ -271,8 +349,8 @@ def ajustes_cot(aj):
 def catalogo_publico():
     """Lo que ve la clienta: sin cantidades de stock."""
     with db.Session() as s:
-        prods = list(s.scalars(select(Producto).where(Producto.visible.is_(True)).order_by(Producto.nombre)))
-    return [{"codigo": p.codigo, "nombre": p.nombre, "tipo": tipo_normal(p.tipo), "unidad": p.unidad,
+        prods = sorted(s.scalars(select(Producto).where(Producto.visible.is_(True))), key=lambda p: nombre_visible(p))
+    return [{"codigo": p.codigo, "nombre": nombre_visible(p), "tipo": tipo_normal(p.tipo), "unidad": p.unidad,
              "familia": (p.familia or "").upper(), "peso_kg": p.peso_kg or 1,
              "detalle": round(p.precio_detalle or p.precio_mayor or 0),
              "mayor": round(p.precio_mayor or p.precio_detalle or 0)}
@@ -304,7 +382,7 @@ def calcular(pedido, aj):
     lineas = []
     for cod, cant in juntas.items():
         p = prods[cod]
-        lineas.append({"codigo": p.codigo, "nombre": p.nombre, "tipo": tipo_normal(p.tipo), "unidad": p.unidad,
+        lineas.append({"codigo": p.codigo, "nombre": nombre_visible(p), "tipo": tipo_normal(p.tipo), "unidad": p.unidad,
                        "familia": (p.familia or p.codigo).upper(), "cantidad": cant,
                        "_mayor": p.precio_mayor or p.precio_detalle or 0,
                        "_detalle": p.precio_detalle or p.precio_mayor or 0, "por_mayor": False,
@@ -356,7 +434,9 @@ def calcular(pedido, aj):
         cerca = [(f, n) for f, n in por_fam.items() if n < R["cot_un_familia"]]
         if cerca and not all(l["por_mayor"] for l in validas):
             f, n = max(cerca, key=lambda x: x[1])
-            consejos.append(f"Llevas {int(n)} unidades de {f.title()}: con {int(R['cot_un_familia'] - n)} más de la misma "
+            ej = next(l for l in validas if l["familia"] == f)
+            etiqueta = adivinar_familia(ej["nombre"]).title() if ej["nombre"] != ej["codigo"] else f"la línea de {ej['nombre']}"
+            consejos.append(f"Llevas {int(n)} unidades de {etiqueta}: con {int(R['cot_un_familia'] - n)} más de la misma "
                             f"familia, o llegando a {int(R['cot_un_surtido'])} surtidas, pasan a precio por mayor.")
 
     neto = 0

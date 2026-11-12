@@ -107,40 +107,49 @@ def lista(request: Request, estado: str = "nueva", vendedor: str = ""):
 
 
 @router.post("/cotizaciones/precios")
-async def subir_precios(request: Request, archivo: UploadFile = File(...)):
-    try:
-        items = cz.leer_lista_precios(await archivo.read())
-    except Exception as e:  # noqa: BLE001
-        return _ui["volver"](request, "/cotizaciones", error=f"No pude leer la lista de precios: {e}")
-    nuevos, cambiados = cz.guardar_lista(items)
-    sin_det = sum(1 for i in items if i["detalle"] is None)
-    sin_may = sum(1 for i in items if i["mayor"] is None)
-    extra = ""
-    if sin_det or sin_may:
-        extra = f" Ojo: {sin_det} sin precio Base detalle y {sin_may} sin precio Base (se usa el otro)."
+async def subir_precios(request: Request, base: UploadFile | None = File(None), detalle: UploadFile | None = File(None)):
+    listas = {}
+    for clave, arch, nombre in (("base", base, "Base"), ("detalle", detalle, "Base detalle")):
+        if arch is None or not arch.filename:
+            continue
+        try:
+            listas[clave] = cz.leer_lista(await arch.read())
+        except Exception as e:  # noqa: BLE001
+            return _ui["volver"](request, "/cotizaciones", error=f"No pude leer la lista {nombre}: {e}")
+        if not listas[clave]:
+            return _ui["volver"](request, "/cotizaciones", error=f"La lista {nombre} no trae precios.")
+    if not listas:
+        return _ui["volver"](request, "/cotizaciones", error="Elige al menos una de las dos listas.")
+    nuevos, total = cz.guardar_precios(listas.get("base"), listas.get("detalle"))
+    cargadas = " y ".join(n for k, n in (("base", "Base"), ("detalle", "Base detalle")) if k in listas)
     return _ui["volver"](request, "/cotizaciones/productos",
-                         aviso=f"Lista cargada: {len(items)} productos ({nuevos} nuevos, {cambiados} actualizados).{extra} "
-                               "Revisa que el tipo (merino, corriedale, vellón natural o teñido), la familia y la unidad estén bien.")
+                         aviso=f"Lista {cargadas} cargada: {total} productos con precio ({nuevos} nuevos). "
+                               "Revisa el tipo, la familia y la unidad de los que se ven raros.")
 
 
 @router.post("/cotizaciones/stock")
 async def subir_stock(request: Request, archivo: UploadFile = File(...)):
     try:
-        saldos = inventario.leer_inventario_defontana(await archivo.read())
+        contenido = await archivo.read()
+        saldos = inventario.leer_inventario_defontana(contenido)
     except Exception as e:  # noqa: BLE001
         return _ui["volver"](request, "/cotizaciones", error=f"No pude leer el inventario: {e}")
     cz.guardar_stock(saldos)
-    return _ui["volver"](request, "/cotizaciones", aviso=f"Stock del cotizador actualizado: {len(saldos)} artículos.")
+    n = cz.guardar_nombres(cz.leer_nombres(contenido))
+    extra = f" Se actualizaron {n} nombres de productos." if n else ""
+    return _ui["volver"](request, "/cotizaciones", aviso=f"Stock del cotizador actualizado: {len(saldos)} artículos.{extra}")
 
 
 @router.get("/cotizaciones/productos", response_class=HTMLResponse)
 def productos(request: Request, q: str = "", tipo: str = ""):
     with db.Session() as s:
-        prods = list(s.scalars(select(cz.Producto).order_by(cz.Producto.nombre)))
+        prods = list(s.scalars(select(cz.Producto).order_by(cz.Producto.codigo)))
         stock = {x.codigo: x.saldo for x in s.scalars(select(cz.Stock))}
     qn = cz.norm(q)
     if qn:
         prods = [p for p in prods if qn in cz.norm(p.nombre) or qn in cz.norm(p.codigo)]
+    if not qn and not tipo:
+        prods.sort(key=lambda p: (p.tipo == "otro", p.unidad or "", p.familia or "", p.codigo))
     if tipo:
         prods = [p for p in prods if cz.tipo_normal(p.tipo) == tipo]
     return _ui["render"](request, "cot_productos.html", prods=prods, stock=stock, q=q, tipo=tipo,
