@@ -16,6 +16,14 @@ Aplicación web interna de Topwool (Meier y Meier Ltda.) para centralizar pedido
 
 Sin claves de WooCommerce corre en **modo demo** (pedidos de ejemplo, no escribe en ningún lado).
 
+## Cotizador para clientas
+
+- Página pública **/cotizar** (no pide clave): la clienta pone sus datos (persona natural o empresa: nombre, RUT validado, razón social, giro, dirección, comuna), elige productos y descarga su cotización en PDF.
+- Cada vendedora manda su propio link (`/cotizar?v=jesu`, sale de Ajustes → Vendedores) y la cotización queda asignada a ella.
+- Precios netos de Defontana: lista **Base** (por mayor) y **Base detalle**. Por mayor: hilado desde 10 kg sumando todos los hilados; vellón desde 10 kg del mismo vellón (editable en Ajustes).
+- Stock: el Informe de Inventario de Defontana (el mismo de la pestaña Inventario). La clienta solo ve si su cantidad está disponible, nunca el saldo, y puede cotizar aunque no haya stock.
+- Pestaña **Cotizaciones**: subir precios y stock, links por vendedora, revisar cotizaciones y marcarlas como pasadas a Defontana con su folio.
+
 ## Puesta en marcha en Render
 
 1. Subir este código a GitHub (cuenta `socmeierymeierltda`, repositorio `topwool-sistema`).

@@ -1,0 +1,33 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<p><a href="/cotizaciones">← Cotizaciones</a></p>
+<h1>Productos del cotizador</h1>
+<p class="sub">Vienen de la lista de precios. Revisa el <b>tipo</b> (define la regla de precio por mayor) y la <b>unidad</b>. Desmarca "visible" para que la clienta no lo vea. Lo que cambies aquí no se pisa al subir una lista nueva.</p>
+<form class="filtros" method="get">
+  <input name="q" value="{{ q }}" placeholder="Buscar producto o código">
+  <select name="tipo" onchange="this.form.submit()"><option value="">Todos los tipos</option>
+  {% for k, et in [('hilado','Hilado'),('vellon','Vellón'),('otro','Otro')] %}<option value="{{ k }}" {{ 'selected' if tipo==k }}>{{ et }}</option>{% endfor %}</select>
+  <button class="sec">Filtrar</button>
+</form>
+{% if prods %}
+<form method="post" action="/cotizaciones/productos">
+<input type="hidden" name="_volver" value="/cotizaciones/productos?q={{ q|urlencode }}&tipo={{ tipo }}">
+<div class="tabla-scroll"><table>
+<tr><th>Visible</th><th>Código</th><th>Producto</th><th>Tipo</th><th>Unidad</th><th class="n">Kg por unidad</th><th class="n">Base detalle</th><th class="n">Base (mayor)</th><th class="n">Stock</th></tr>
+{% for p in prods %}
+<tr>
+<td><input type="hidden" name="cod" value="{{ p.codigo }}"><input type="checkbox" name="vis_{{ p.codigo }}" value="1" {{ 'checked' if p.visible }} style="width:auto"></td>
+<td style="font-size:12px">{{ p.codigo }}</td><td>{{ p.nombre }}</td>
+<td><select name="tipo_{{ p.codigo }}">{% for k, et in [('hilado','Hilado'),('vellon','Vellón'),('otro','Otro')] %}<option value="{{ k }}" {{ 'selected' if p.tipo==k }}>{{ et }}</option>{% endfor %}</select></td>
+<td><select name="unidad_{{ p.codigo }}"><option value="kg" {{ 'selected' if p.unidad=='kg' }}>kg</option><option value="un" {{ 'selected' if p.unidad=='un' }}>un</option></select></td>
+<td class="n"><input name="peso_{{ p.codigo }}" value="{{ p.peso_kg|num }}" style="width:70px;text-align:right"></td>
+<td class="n">{{ p.precio_detalle|clp if p.precio_detalle else '—' }}</td>
+<td class="n">{{ p.precio_mayor|clp if p.precio_mayor else '—' }}</td>
+<td class="n">{{ stock.get(p.codigo)|num if stock.get(p.codigo) is not none else '—' }}</td>
+</tr>
+{% endfor %}
+</table></div>
+<div class="acciones"><button>Guardar cambios</button></div>
+</form>
+{% else %}<div class="vacio">{% if q or tipo %}Nada con ese filtro.{% else %}Aún no hay productos: sube la lista de precios en Cotizaciones.{% endif %}</div>{% endif %}
+{% endblock %}

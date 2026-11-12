@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cotiza con Topwool</title>
+<meta name="description" content="Arma tu cotización de lanas, hilados y vellón Topwool.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;800&display=swap" rel="stylesheet">
+<link rel="icon" href="/static/icono-192.png">
+<meta name="theme-color" content="#5b4636">
+<style>
+:root{
+  --fondo:#f6f1ea; --papel:#fffdf9; --tinta:#2f2620; --suave:#7a6a5d; --linea:#e6dccf;
+  --cafe:#5b4636; --acento:#b5562f; --verde:#3f7d4e; --verde-bg:#e8f2ea;
+  --amarillo-bg:#fff4d6; --amarillo:#8a6200; --rojo:#a8332a; --rojo-bg:#fbe9e7; --radio:12px;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+a{color:var(--acento)}
+body{margin:0;background:var(--fondo);color:var(--tinta);font:16px/1.45 "Figtree",system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:var(--cafe);color:#fff;padding:22px 16px 26px}
+header .in,main{max-width:760px;margin:0 auto}
+.marca{font-weight:800;letter-spacing:.16em;font-size:15px;opacity:.85}
+h1{font-size:26px;margin:6px 0 4px;line-height:1.2}
+header p{margin:0;opacity:.85}
+.atiende{display:inline-block;margin-top:12px;background:rgba(255,255,255,.14);padding:4px 12px;border-radius:99px;font-size:14px}
+main{padding:16px 16px 120px}
+section{background:var(--papel);border:1px solid var(--linea);border-radius:var(--radio);padding:18px 16px;margin:0 0 14px}
+h2{font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+h2 .num{background:var(--cafe);color:#fff;width:26px;height:26px;border-radius:50%;display:inline-grid;place-items:center;font-size:14px;flex:none}
+.sub{color:var(--suave);margin:0 0 14px;font-size:14px}
+.toggle{display:grid;grid-template-columns:1fr 1fr;background:var(--fondo);border-radius:10px;padding:4px;margin-bottom:14px}
+.toggle button{background:transparent;color:var(--suave);border:0;padding:9px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+.toggle button.on{background:#fff;color:var(--cafe);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.grilla{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+.campo{display:flex;flex-direction:column;gap:4px}
+.campo.full{grid-column:1/-1}
+label{font-size:13px;font-weight:600;color:var(--suave)}
+label em{font-weight:400;font-style:normal}
+input,select{font:inherit;color:inherit;background:#fff;border:1px solid var(--linea);border-radius:9px;padding:10px 11px;width:100%}
+input:focus{outline:2px solid #d9b8a2;border-color:#c9a58c}
+input.malo{border-color:var(--rojo);background:var(--rojo-bg)}
+.buscar{position:relative;margin-bottom:10px}
+.filtros{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.filtros button{border:1px solid var(--linea);background:#fff;color:var(--cafe);border-radius:99px;padding:5px 12px;font:inherit;font-size:14px;cursor:pointer}
+.filtros button.on{background:var(--cafe);color:#fff;border-color:var(--cafe)}
+.prods{display:flex;flex-direction:column;gap:8px;max-height:430px;overflow:auto;padding-right:2px}
+.prod{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;background:#fff}
+.prod .nom{font-weight:600;font-size:15px}
+.prod .cod{color:var(--suave);font-size:12px}
+.prod .pre{font-size:14px}
+.prod .pre small{color:var(--suave)}
+.agregar{display:flex;gap:6px;align-items:center}
+.agregar input{width:76px;padding:8px;text-align:right}
+.agregar span{font-size:13px;color:var(--suave);min-width:20px}
+button.prim{font:inherit;font-weight:600;border:0;border-radius:9px;padding:9px 14px;cursor:pointer;background:var(--cafe);color:#fff}
+button.prim:disabled{opacity:.5;cursor:default}
+.mas{color:var(--suave);font-size:13px;text-align:center;padding:6px}
+.vacio{color:var(--suave);text-align:center;padding:18px;border:1px dashed var(--linea);border-radius:10px;font-size:14px}
+.linea{display:grid;grid-template-columns:1fr auto;gap:4px 10px;padding:12px 0;border-bottom:1px solid var(--linea)}
+.linea:last-child{border-bottom:0}
+.linea .nom{font-weight:600}
+.linea .det{font-size:13px;color:var(--suave)}
+.linea .tot{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.linea .ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;grid-column:1/-1}
+.linea .ctl input{width:80px;padding:6px 8px;text-align:right}
+.quitar{background:none;border:0;color:var(--acento);font:inherit;font-size:13px;cursor:pointer;padding:4px}
+.chip{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:99px}
+.chip.si{background:var(--verde-bg);color:var(--verde)}
+.chip.no{background:var(--amarillo-bg);color:var(--amarillo)}
+.chip.may{background:#efe6da;color:var(--cafe)}
+.aviso{background:var(--amarillo-bg);color:var(--amarillo);border-radius:9px;padding:9px 12px;font-size:14px;margin:10px 0 0}
+.aviso.ok{background:var(--verde-bg);color:var(--verde)}
+.totales{margin-top:12px;border-top:2px solid var(--linea);padding-top:10px;font-variant-numeric:tabular-nums}
+.totales div{display:flex;justify-content:space-between;padding:3px 0}
+.totales .grande{font-size:20px;font-weight:800;color:var(--cafe)}
+.comentario{background:var(--fondo);border-radius:9px;padding:10px 12px;font-size:13px;color:var(--suave);margin-top:12px}
+.barra-final{position:fixed;left:0;right:0;bottom:0;background:var(--papel);border-top:1px solid var(--linea);padding:12px 16px calc(12px + env(safe-area-inset-bottom));z-index:5}
+.barra-final .in{max-width:760px;margin:0 auto;display:flex;gap:12px;align-items:center}
+.barra-final .t{flex:1;font-size:14px;color:var(--suave)}
+.barra-final .t b{display:block;font-size:18px;color:var(--tinta)}
+.barra-final button{padding:13px 18px;font-size:16px}
+.error{background:var(--rojo-bg);color:var(--rojo);border-radius:9px;padding:10px 12px;margin:0 0 12px;font-weight:500;display:none}
+.listo{text-align:center;padding:30px 18px}
+.listo h2{justify-content:center;font-size:22px}
+.listo a.prim{display:inline-block;text-decoration:none;margin:14px 0 6px;font:inherit;font-weight:600;border-radius:9px;padding:13px 20px;background:var(--cafe);color:#fff}
+@media (max-width:560px){
+  .grilla{grid-template-columns:1fr}
+  h1{font-size:23px}
+  .prod{grid-template-columns:1fr}
+  .agregar{justify-content:flex-end}
+}
+</style>
+</head>
+<body>
+<header><div class="in">
+  <div class="marca">TOPWOOL · MEIER &amp; MEIER</div>
+  <h1>Arma tu cotización</h1>
+  <p>Elige tus lanas y te generamos la cotización al tiro, en PDF.</p>
+  {% if vendedor %}<span class="atiende">Te atiende: {{ vendedor|title }}</span>{% endif %}
+</div></header>
+
+<main id="app">
+<div class="error" id="error"></div>
+
+<section id="sec-datos">
+  <h2><span class="num">1</span>Tus datos</h2>
+  <p class="sub">Los usamos para emitir la cotización y, si compras, tu factura o boleta.</p>
+  <div class="toggle" role="tablist">
+    <button type="button" data-tipo="natural" class="on">Persona natural</button>
+    <button type="button" data-tipo="empresa">Empresa</button>
+  </div>
+  <div class="grilla">
+    <div class="campo" id="c-razon" hidden><label for="razon_social">Razón social</label><input id="razon_social" autocomplete="organization"></div>
+    <div class="campo"><label for="nombre" id="l-nombre">Nombre completo</label><input id="nombre" autocomplete="name"></div>
+    <div class="campo"><label for="rut">RUT</label><input id="rut" inputmode="text" placeholder="12.345.678-9"></div>
+    <div class="campo"><label for="giro">Giro</label><input id="giro" placeholder="Ej: artesanía, comercio, particular"></div>
+    <div class="campo full"><label for="direccion">Dirección</label><input id="direccion" autocomplete="street-address" placeholder="Calle, número, depto."></div>
+    <div class="campo"><label for="comuna">Comuna</label><input id="comuna"></div>
+    <div class="campo"><label for="ciudad">Ciudad <em>(opcional)</em></label><input id="ciudad"></div>
+    <div class="campo"><label for="telefono">Teléfono <em>(opcional)</em></label><input id="telefono" inputmode="tel" autocomplete="tel" placeholder="+56 9 1234 5678"></div>
+    <div class="campo"><label for="correo">Correo <em>(opcional)</em></label><input id="correo" type="email" autocomplete="email"></div>
+  </div>
+</section>
+
+<section>
+  <h2><span class="num">2</span>Elige tus productos</h2>
+  <p class="sub">Precios netos (+ IVA). Hilados: precio por mayor desde {{ reglas.kg_hilado|round|int }} kg en total. Vellón: desde {{ reglas.kg_vellon|round|int }} kg del mismo vellón.</p>
+  <div class="buscar"><input id="q" type="search" placeholder="Busca por nombre o color: relmu, malal, mostaza…"></div>
+  <div class="filtros" id="filtros">
+    <button type="button" data-f="" class="on">Todos</button>
+    <button type="button" data-f="hilado">Hilados</button>
+    <button type="button" data-f="vellon">Vellón</button>
+    <button type="button" data-f="otro">Otros</button>
+  </div>
+  <div class="prods" id="prods"></div>
+</section>
+
+<section>
+  <h2><span class="num">3</span>Tu cotización</h2>
+  <div id="carro"><div class="vacio">Aún no agregas productos.</div></div>
+  <div id="avisos"></div>
+  <div class="totales" id="totales" hidden>
+    <div><span>Neto</span><span id="t-neto"></span></div>
+    <div><span>IVA 19%</span><span id="t-iva"></span></div>
+    <div class="grande"><span>Total</span><span id="t-total"></span></div>
+  </div>
+  <div class="comentario">Cotización válida por 30 días, sujeta a disponibilidad de stock. No incluye envío. Pago contra entrega.</div>
+</section>
+</main>
+
+<div class="barra-final"><div class="in">
+  <div class="t">Total con IVA<b id="b-total">$0</b></div>
+  <button class="prim" id="generar" disabled>Generar cotización</button>
+</div></div>
+
+<script>
+const PRODUCTOS = {{ productos|tojson }};
+const VENDEDOR = {{ v|tojson }};
+const POR = Object.fromEntries(PRODUCTOS.map(p => [p.codigo, p]));
+const $ = id => document.getElementById(id);
+const clp = n => "$" + Math.round(n || 0).toLocaleString("es-CL");
+const norm = t => (t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+const fmtCant = (c, u) => (u === "kg" ? String(c).replace(".", ",") + " kg" : c + " un");
+let tipo = "natural", filtro = "", carro = [], calculo = null, timer = null;
+
+// borrador en este navegador (si no se puede, sigue igual)
+const CLAVE = "topwool-cotizacion";
+try {
+  const g = JSON.parse(localStorage.getItem(CLAVE) || "null");
+  if (g) {
+    carro = (g.carro || []).filter(x => POR[x.codigo]);
+    Object.entries(g.cliente || {}).forEach(([k, v]) => { if ($(k)) $(k).value = v; });
+    if (g.tipo) setTipo(g.tipo);
+  }
+} catch (e) {}
+function guardarBorrador() {
+  try { localStorage.setItem(CLAVE, JSON.stringify({carro, tipo, cliente: datosCliente()})); } catch (e) {}
+}
+
+function setTipo(t) {
+  tipo = t;
+  document.querySelectorAll(".toggle button").forEach(b => b.classList.toggle("on", b.dataset.tipo === t));
+  $("c-razon").hidden = t !== "empresa";
+  $("l-nombre").textContent = t === "empresa" ? "Nombre de contacto" : "Nombre completo";
+  $("giro").placeholder = t === "empresa" ? "Ej: venta de artículos de lana" : "Ej: artesanía, particular";
+}
+document.querySelectorAll(".toggle button").forEach(b => b.onclick = () => { setTipo(b.dataset.tipo); guardarBorrador(); });
+document.querySelectorAll("#sec-datos input").forEach(i => i.addEventListener("input", () => { i.classList.remove("malo"); guardarBorrador(); }));
+
+function datosCliente() {
+  const d = {tipo_cliente: tipo};
+  ["nombre", "rut", "razon_social", "giro", "direccion", "comuna", "ciudad", "telefono", "correo"].forEach(k => d[k] = $(k).value.trim());
+  if (tipo === "natural") d.razon_social = d.nombre;
+  return d;
+}
+
+// ---- catálogo ----
+function pintarProductos() {
+  const q = norm($("q").value).split(/\s+/).filter(Boolean);
+  const lista = PRODUCTOS.filter(p => (!filtro || p.tipo === filtro) && q.every(w => norm(p.nombre + " " + p.codigo).includes(w)));
+  const cont = $("prods");
+  cont.innerHTML = "";
+  if (!PRODUCTOS.length) { cont.innerHTML = '<div class="vacio">Estamos actualizando la lista de productos. Vuelve a intentarlo más tarde o escríbenos.</div>'; return; }
+  if (!lista.length) { cont.innerHTML = '<div class="vacio">No encontramos productos con esa búsqueda.</div>'; return; }
+  lista.slice(0, 60).forEach(p => {
+    const u = p.unidad === "kg" ? "kg" : "un";
+    const el = document.createElement("div");
+    el.className = "prod";
+    const info = document.createElement("div");
+    const nom = document.createElement("div"); nom.className = "nom"; nom.textContent = p.nombre;
+    const cod = document.createElement("div"); cod.className = "cod"; cod.textContent = p.codigo;
+    const pre = document.createElement("div"); pre.className = "pre";
+    pre.innerHTML = `${clp(p.detalle)} <small>/ ${u} neto</small>` +
+      (p.tipo !== "otro" && p.mayor < p.detalle ? ` · <small>por mayor ${clp(p.mayor)}</small>` : "");
+    info.append(nom, cod, pre);
+    const ag = document.createElement("div"); ag.className = "agregar";
+    const inp = document.createElement("input");
+    inp.type = "number"; inp.min = p.unidad === "kg" ? "0.5" : "1"; inp.step = p.unidad === "kg" ? "0.5" : "1";
+    inp.value = p.unidad === "kg" ? "1" : "10"; inp.inputMode = "decimal"; inp.setAttribute("aria-label", "Cantidad");
+    const un = document.createElement("span"); un.textContent = u;
+    const bt = document.createElement("button"); bt.className = "prim"; bt.type = "button"; bt.textContent = "Agregar";
+    bt.onclick = () => agregar(p.codigo, parseFloat(String(inp.value).replace(",", ".")));
+    ag.append(inp, un, bt);
+    el.append(info, ag);
+    cont.append(el);
+  });
+  if (lista.length > 60) cont.insertAdjacentHTML("beforeend", `<div class="mas">Hay ${lista.length - 60} productos más: afina la búsqueda.</div>`);
+}
+$("q").addEventListener("input", pintarProductos);
+document.querySelectorAll("#filtros button").forEach(b => b.onclick = () => {
+  filtro = b.dataset.f;
+  document.querySelectorAll("#filtros button").forEach(x => x.classList.toggle("on", x === b));
+  pintarProductos();
+});
+
+// ---- carro ----
+function agregar(codigo, cant) {
+  if (!(cant > 0)) return;
+  const ya = carro.find(x => x.codigo === codigo);
+  if (ya) ya.cantidad = +(ya.cantidad + cant).toFixed(2); else carro.push({codigo, cantidad: cant});
+  cambio();
+}
+function cambio() { guardarBorrador(); pintarCarro(); clearTimeout(timer); timer = setTimeout(recalcular, 250); }
+
+async function recalcular() {
+  if (!carro.length) { calculo = null; pintarCarro(); return; }
+  try {
+    const r = await fetch("/cotizar/calcular", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({items: carro})});
+    calculo = await r.json();
+  } catch (e) { calculo = null; }
+  pintarCarro();
+}
+
+function pintarCarro() {
+  const cont = $("carro"), av = $("avisos");
+  av.innerHTML = "";
+  if (!carro.length) {
+    cont.innerHTML = '<div class="vacio">Aún no agregas productos.</div>';
+    $("totales").hidden = true; $("b-total").textContent = "$0"; $("generar").disabled = true; return;
+  }
+  const calc = {};
+  (calculo && calculo.lineas || []).forEach(l => calc[l.codigo] = l);
+  cont.innerHTML = "";
+  carro.forEach((x, i) => {
+    const p = POR[x.codigo], l = calc[x.codigo];
+    const el = document.createElement("div"); el.className = "linea";
+    const a = document.createElement("div");
+    const nom = document.createElement("div"); nom.className = "nom"; nom.textContent = p.nombre;
+    const det = document.createElement("div"); det.className = "det";
+    det.textContent = l ? `${fmtCant(l.cantidad, l.unidad)} × ${clp(l.precio)} neto` : "Calculando…";
+    a.append(nom, det);
+    const tot = document.createElement("div"); tot.className = "tot"; tot.textContent = l ? clp(l.total) : "";
+    const ctl = document.createElement("div"); ctl.className = "ctl";
+    const inp = document.createElement("input");
+    inp.type = "number"; inp.value = x.cantidad; inp.step = p.unidad === "kg" ? "0.5" : "1"; inp.min = "0"; inp.inputMode = "decimal";
+    inp.setAttribute("aria-label", "Cantidad");
+    inp.onchange = () => { const v = parseFloat(String(inp.value).replace(",", ".")); if (v > 0) { x.cantidad = v; } else { carro.splice(i, 1); } cambio(); };
+    const un = document.createElement("span"); un.className = "det"; un.textContent = p.unidad === "kg" ? "kg" : "un";
+    ctl.append(inp, un);
+    if (l && l.por_mayor) ctl.insertAdjacentHTML("beforeend", '<span class="chip may">Precio por mayor</span>');
+    if (l && l.disponible === true) ctl.insertAdjacentHTML("beforeend", '<span class="chip si">Disponible</span>');
+    if (l && l.disponible === false) ctl.insertAdjacentHTML("beforeend", '<span class="chip no">Sin stock por ahora</span>');
+    const q = document.createElement("button"); q.className = "quitar"; q.type = "button"; q.textContent = "Quitar";
+    q.onclick = () => { carro.splice(i, 1); cambio(); };
+    ctl.append(q);
+    el.append(a, tot, ctl);
+    cont.append(el);
+  });
+  if (calculo && calculo.lineas) {
+    if (calculo.falta_hilado_kg > 0)
+      av.insertAdjacentHTML("beforeend", `<div class="aviso">Llevas ${String(calculo.kg_hilado).replace(".", ",")} kg de hilado. Con ${String(calculo.falta_hilado_kg).replace(".", ",")} kg más, todo el hilado pasa a precio por mayor.</div>`);
+    else if (calculo.hilado_mayor)
+      av.insertAdjacentHTML("beforeend", '<div class="aviso ok">¡Tu hilado ya va con precio por mayor!</div>');
+    if (calculo.lineas.some(l => l.disponible === false))
+      av.insertAdjacentHTML("beforeend", '<div class="aviso">Algunos productos no tienen stock hoy. Puedes cotizarlos igual: el stock se confirma al momento de comprar.</div>');
+    $("t-neto").textContent = clp(calculo.neto); $("t-iva").textContent = clp(calculo.iva); $("t-total").textContent = clp(calculo.total);
+    $("b-total").textContent = clp(calculo.total);
+    $("totales").hidden = false;
+  }
+  $("generar").disabled = !calculo;
+}
+
+// ---- RUT ----
+function rutOk(r) {
+  r = r.replace(/[^0-9kK]/g, "").toUpperCase();
+  if (r.length < 2) return false;
+  const cuerpo = r.slice(0, -1), dv = r.slice(-1);
+  let s = 0, m = 2;
+  for (let i = cuerpo.length - 1; i >= 0; i--) { s += +cuerpo[i] * m; m = m === 7 ? 2 : m + 1; }
+  const e = 11 - (s % 11);
+  return dv === (e === 11 ? "0" : e === 10 ? "K" : String(e));
+}
+$("rut").addEventListener("blur", () => {
+  const r = $("rut").value.replace(/[^0-9kK]/g, "").toUpperCase();
+  if (r.length > 1) $("rut").value = (+r.slice(0, -1)).toLocaleString("es-CL") + "-" + r.slice(-1);
+  if ($("rut").value && !rutOk($("rut").value)) $("rut").classList.add("malo");
+});
+
+function mostrarError(t) { const e = $("error"); e.textContent = t; e.style.display = "block"; e.scrollIntoView({behavior: "smooth", block: "center"}); }
+
+$("generar").onclick = async () => {
+  $("error").style.display = "none";
+  const d = datosCliente();
+  const oblig = tipo === "empresa" ? ["razon_social", "nombre", "rut", "giro", "direccion", "comuna"] : ["nombre", "rut", "giro", "direccion", "comuna"];
+  const faltan = oblig.filter(k => !d[k]);
+  faltan.forEach(k => $(k).classList.add("malo"));
+  if (faltan.length) { mostrarError("Completa tus datos marcados en rojo para generar la cotización."); return; }
+  if (!rutOk(d.rut)) { $("rut").classList.add("malo"); mostrarError("El RUT no es válido. Revísalo, por favor."); return; }
+  const bt = $("generar"); bt.disabled = true; bt.textContent = "Generando…";
+  try {
+    const r = await fetch("/cotizar/enviar", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({cliente: d, items: carro, v: VENDEDOR})});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || "No pudimos generar la cotización.");
+    try { localStorage.removeItem(CLAVE); } catch (e) {}
+    document.querySelector(".barra-final").remove();
+    $("app").innerHTML = `<section class="listo"><h2>¡Tu cotización está lista! 🧶</h2>
+      <p class="sub">Cotización N° ${j.id}. Ya nos llegó a nosotros también: te contactaremos para confirmar stock y despacho.</p>
+      <a class="prim" href="${j.pdf}" target="_blank" rel="noopener">Descargar cotización (PDF)</a>
+      <p class="sub" style="margin-top:14px"><a href="${location.pathname + location.search}">Hacer otra cotización</a></p></section>`;
+    window.scrollTo(0, 0);
+  } catch (e) {
+    mostrarError(e.message);
+    bt.disabled = false; bt.textContent = "Generar cotización";
+  }
+};
+
+setTipo(tipo);
+pintarProductos();
+if (carro.length) { pintarCarro(); recalcular(); }
+</script>
+</body>
+</html>

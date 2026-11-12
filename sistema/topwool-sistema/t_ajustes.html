@@ -38,6 +38,9 @@
     <div class="campo c6"><label>Enlace seguimiento Starken ({n} = número)</label><input name="link_starken" value="{{ aj.link_starken }}"></div>
     <div class="campo c12"><label>Aviso de despacho al cliente web ({nombre}, {empresa}, {tracking}, {link})</label><textarea name="aviso_despacho" rows="6">{{ aj.aviso_despacho }}</textarea></div>
     <div class="campo c4"><label>Estados "sin pagar" de la web</label><input name="estados_sin_pagar" value="{{ aj.estados_sin_pagar }}"></div>
+    <div class="campo c12" style="margin-top:10px"><b>Cotizador</b> <span class="sub">Precio por mayor (lista Base) desde estos kilos; bajo eso, Base detalle.</span></div>
+    <div class="campo c4"><label>Hilado: kilos en total (sumando todos los hilados)</label><input name="cot_mayor_kg_hilado" value="{{ aj.cot_mayor_kg_hilado }}"></div>
+    <div class="campo c4"><label>Vellón: kilos del mismo vellón</label><input name="cot_mayor_kg_vellon" value="{{ aj.cot_mayor_kg_vellon }}"></div>
   </div>
   <div class="acciones"><button>Guardar ajustes</button></div>
 </form>

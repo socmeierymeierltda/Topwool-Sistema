@@ -17,6 +17,8 @@ import produccion  # noqa: F401
 import informes  # noqa: F401
 import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
+import rutas_cotizador
+import cotizador  # noqa: F401  (registra sus tablas)
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Sistema Topwool")
@@ -54,7 +56,7 @@ def volver(request, url, aviso=None, error=None):
 
 @app.middleware("http")
 async def proteger(request: Request, call_next):
-    libre = request.url.path.startswith(("/login", "/static", "/salud"))
+    libre = request.url.path.startswith(("/login", "/static", "/salud", "/cotizar"))
     if not libre and request.session.get("ok") is not True:
         return RedirectResponse("/login", status_code=303)
     return await call_next(request)
@@ -450,6 +452,10 @@ async def comparar_inventario(request: Request, archivo: UploadFile = File(...))
     except Exception as e:  # noqa: BLE001
         return volver(request, "/inventario", error=f"No pude leer el archivo de Defontana: {e}")
     nombre = archivo.filename
+    try:
+        cotizador.guardar_stock(saldos)   # el cotizador usa el mismo informe
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
 
     def tarea(avance):
         avance(f"Leí {len(saldos)} artículos de Defontana. Leyendo el stock de la web…")
@@ -487,6 +493,10 @@ async def actualizar_inventario(request: Request):
 # ---------- cobranza ----------
 rutas_cobranza._ui.update(render=render, volver=volver)
 app.include_router(rutas_cobranza.router)
+
+# ---------- cotizador ----------
+rutas_cotizador._ui.update(render=render, volver=volver, tpl=tpl)
+app.include_router(rutas_cotizador.router)
 
 
 # ---------- ajustes ----------

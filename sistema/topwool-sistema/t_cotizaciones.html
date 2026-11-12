@@ -1,0 +1,60 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Cotizaciones</h1>
+<p class="sub">Las clientas arman su cotización en la página pública. Aquí las revisas y las pasas a Defontana.</p>
+
+<div class="grilla" style="margin-bottom:6px">
+  <div class="tarjeta c6">
+    <b>1. Lista de precios</b>
+    <p class="sub" style="margin:4px 0 10px">Excel de Defontana con las listas <b>Base</b> (por mayor) y <b>Base detalle</b>. Súbelo cuando cambien los precios.</p>
+    <form class="subir" method="post" action="/cotizaciones/precios" enctype="multipart/form-data">
+      <input type="file" name="archivo" accept=".xlsx" required> <button>Cargar precios</button>
+    </form>
+    <p class="sub" style="margin:8px 0 0;font-size:13px">{{ n_vis }} de {{ n_prod }} productos visibles{% if ult_precios %} · última carga {{ ult_precios.strftime('%d-%m-%Y %H:%M') }}{% endif %} · <a href="/cotizaciones/productos">revisar productos</a></p>
+  </div>
+  <div class="tarjeta c6">
+    <b>2. Stock</b>
+    <p class="sub" style="margin:4px 0 10px">Informe de Inventario de Defontana (el mismo de la pestaña Inventario; si lo subes allá, se actualiza aquí también).</p>
+    <form class="subir" method="post" action="/cotizaciones/stock" enctype="multipart/form-data">
+      <input type="file" name="archivo" accept=".xlsx" required> <button>Cargar stock</button>
+    </form>
+    <p class="sub" style="margin:8px 0 0;font-size:13px">{% if fecha_stock %}Stock al {{ fecha_stock.strftime('%d-%m-%Y %H:%M') }}{% else %}Aún sin stock cargado: la clienta no verá disponibilidad.{% endif %}</p>
+  </div>
+</div>
+
+<details class="tarjeta">
+  <summary><b>3. Links para enviar por WhatsApp</b> <span class="sub">— cada vendedora manda el suyo y la cotización le queda asignada</span></summary>
+  <div class="tabla-scroll" style="margin-top:10px"><table>
+  {% for nombre, url in links %}
+  <tr><td>{{ nombre|title }}</td><td style="font-size:13px"><a href="{{ url }}" target="_blank">{{ url }}</a></td>
+  <td><button type="button" class="chico sec" onclick="navigator.clipboard.writeText('{{ url }}');this.textContent='Copiado'">Copiar</button></td></tr>
+  {% endfor %}
+  </table></div>
+  <p class="sub" style="margin:8px 0 0;font-size:13px">Los nombres salen de Ajustes → Vendedores.</p>
+</details>
+
+<div class="filtros">
+  {% for k, et in [('nueva','Nuevas'),('en_defontana','En Defontana'),('descartada','Descartadas'),('','Todas')] %}
+  <a class="boton {{ '' if estado==k else 'sec' }}" href="?estado={{ k }}&vendedor={{ vendedor }}">{{ et }}{% if k %} ({{ conteo.get(k, 0) }}){% endif %}</a>
+  {% endfor %}
+  <form method="get" style="margin-left:auto"><input type="hidden" name="estado" value="{{ estado }}">
+    <select name="vendedor" onchange="this.form.submit()"><option value="">Todas las vendedoras</option>
+    {% for v in vendedores %}<option value="{{ v }}" {{ 'selected' if v==vendedor }}>{{ v|title }}</option>{% endfor %}</select></form>
+</div>
+
+{% if cots %}
+<div class="tabla-scroll"><table>
+<tr><th>N°</th><th>Fecha</th><th>Cliente</th><th>RUT</th><th>Comuna</th><th>Vendedora</th><th class="n">Total</th><th>Estado</th></tr>
+{% for c in cots %}
+<tr>
+<td><a href="/cotizaciones/{{ c.id }}">{{ c.id }}</a></td>
+<td>{{ c.creada.strftime('%d-%m-%Y %H:%M') }}</td>
+<td><a href="/cotizaciones/{{ c.id }}">{{ c.razon_social or c.nombre }}</a></td>
+<td>{{ c.rut }}</td><td>{{ c.comuna }}</td><td>{{ (c.vendedor or '—')|title }}</td>
+<td class="n">{{ c.total|clp }}</td>
+<td><span class="chip {{ 'flow' if c.estado=='en_defontana' else ('otro' if c.estado=='descartada' else 'transferencia') }}">{{ {'nueva':'Nueva','en_defontana':'En Defontana','descartada':'Descartada'}[c.estado] }}</span>{% if c.folio_defontana %} <span class="sub" style="font-size:12px">folio {{ c.folio_defontana }}</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+{% else %}<div class="vacio">No hay cotizaciones {{ {'nueva':'nuevas','en_defontana':'pasadas a Defontana','descartada':'descartadas'}.get(estado, '') }}.</div>{% endif %}
+{% endblock %}

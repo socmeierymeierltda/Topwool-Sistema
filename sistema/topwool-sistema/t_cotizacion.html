@@ -1,0 +1,42 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<p><a href="/cotizaciones">← Cotizaciones</a></p>
+<h1>Cotización N° {{ c.id }} — {{ c.razon_social or c.nombre }}</h1>
+<p class="sub">{{ c.creada.strftime('%d-%m-%Y %H:%M') }} · {{ 'Empresa' if c.tipo_cliente=='empresa' else 'Persona natural' }} · vendedora: {{ (c.vendedor or 'sin asignar')|title }}</p>
+
+<div class="tarjeta">
+  <div class="grilla">
+    <div class="campo c4"><label>Razón social</label>{{ c.razon_social }}</div>
+    <div class="campo c4"><label>Contacto</label>{{ c.nombre }}</div>
+    <div class="campo c4"><label>RUT</label>{{ c.rut }}</div>
+    <div class="campo c4"><label>Giro</label>{{ c.giro }}</div>
+    <div class="campo c4"><label>Dirección</label>{{ c.direccion }}</div>
+    <div class="campo c4"><label>Comuna / ciudad</label>{{ c.comuna }}{% if c.ciudad %} / {{ c.ciudad }}{% endif %}</div>
+    <div class="campo c4"><label>Teléfono</label>{% if c.telefono %}<a href="https://wa.me/{{ c.telefono|replace(' ','')|replace('+','')|replace('-','') }}" target="_blank">{{ c.telefono }}</a>{% else %}—{% endif %}</div>
+    <div class="campo c4"><label>Correo</label>{{ c.correo or '—' }}</div>
+  </div>
+</div>
+
+<div class="tabla-scroll"><table>
+<tr><th>Código</th><th>Detalle</th><th class="n">Cant.</th><th class="n">P. unitario</th><th class="n">Total</th><th>Stock hoy{% if fecha_stock %} <span style="text-transform:none;font-weight:400">({{ fecha_stock.strftime('%d-%m') }})</span>{% endif %}</th></tr>
+{% for l in lineas %}
+<tr><td>{{ l.codigo }}</td><td>{{ l.nombre }}{% if l.por_mayor %} <span class="chip">por mayor</span>{% endif %}</td>
+<td class="n">{{ l.cantidad|num }} {{ l.unidad }}</td><td class="n">{{ l.precio|clp }}</td><td class="n">{{ l.total|clp }}</td>
+<td>{% set d = disp.get(l.codigo) %}{% if d is true %}<span class="chip flow">alcanza</span>{% elif d is false %}<span class="chip otro">no alcanza</span>{% else %}—{% endif %}</td></tr>
+{% endfor %}
+<tr><td colspan="4" class="n">Neto</td><td class="n">{{ c.neto|clp }}</td><td></td></tr>
+<tr><td colspan="4" class="n">IVA 19%</td><td class="n">{{ c.iva|clp }}</td><td></td></tr>
+<tr><td colspan="4" class="n"><b>Total</b></td><td class="n"><b>{{ c.total|clp }}</b></td><td></td></tr>
+</table></div>
+<p class="sub" style="margin-top:8px">Para el Drive: <code>{{ texto }}</code></p>
+
+<form class="tarjeta" method="post" action="/cotizaciones/{{ c.id }}">
+  <div class="grilla">
+    <div class="campo c3"><label>Estado</label><select name="estado">
+      {% for k, et in [('nueva','Nueva'),('en_defontana','Pasada a Defontana'),('descartada','Descartada')] %}<option value="{{ k }}" {{ 'selected' if c.estado==k }}>{{ et }}</option>{% endfor %}</select></div>
+    <div class="campo c3"><label>Folio en Defontana</label><input name="folio_defontana" value="{{ c.folio_defontana or '' }}"></div>
+    <div class="campo c6"><label>Nota interna</label><input name="nota" value="{{ c.nota or '' }}"></div>
+  </div>
+  <div class="acciones"><a class="boton sec" href="/cotizaciones/{{ c.id }}/pdf" target="_blank">Ver PDF</a><button>Guardar</button></div>
+</form>
+{% endblock %}
