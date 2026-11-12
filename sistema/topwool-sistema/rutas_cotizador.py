@@ -120,7 +120,7 @@ async def subir_precios(request: Request, archivo: UploadFile = File(...)):
         extra = f" Ojo: {sin_det} sin precio Base detalle y {sin_may} sin precio Base (se usa el otro)."
     return _ui["volver"](request, "/cotizaciones/productos",
                          aviso=f"Lista cargada: {len(items)} productos ({nuevos} nuevos, {cambiados} actualizados).{extra} "
-                               "Revisa que el tipo (hilado/vellón) y la unidad estén bien.")
+                               "Revisa que el tipo (merino, corriedale, vellón natural o teñido), la familia y la unidad estén bien.")
 
 
 @router.post("/cotizaciones/stock")
@@ -142,8 +142,9 @@ def productos(request: Request, q: str = "", tipo: str = ""):
     if qn:
         prods = [p for p in prods if qn in cz.norm(p.nombre) or qn in cz.norm(p.codigo)]
     if tipo:
-        prods = [p for p in prods if p.tipo == tipo]
-    return _ui["render"](request, "cot_productos.html", prods=prods, stock=stock, q=q, tipo=tipo)
+        prods = [p for p in prods if cz.tipo_normal(p.tipo) == tipo]
+    return _ui["render"](request, "cot_productos.html", prods=prods, stock=stock, q=q, tipo=tipo,
+                         tipos=cz.TIPOS, tipo_normal=cz.tipo_normal)
 
 
 @router.post("/cotizaciones/productos")
@@ -159,8 +160,10 @@ async def guardar_productos(request: Request):
             unidad = form.get(f"unidad_{cod}") or p.unidad
             peso = cz._num(form.get(f"peso_{cod}")) or p.peso_kg or 1
             visible = form.get(f"vis_{cod}") == "1"
-            if (tipo, unidad, round(peso, 4), visible) != (p.tipo, p.unidad, round(p.peso_kg or 1, 4), bool(p.visible)):
-                p.tipo, p.unidad, p.peso_kg, p.visible, p.editado = tipo, unidad, peso, visible, True
+            fam = (form.get(f"fam_{cod}") or "").strip().upper()[:80]
+            antes = (cz.tipo_normal(p.tipo), p.unidad, round(p.peso_kg or 1, 4), bool(p.visible), (p.familia or "").upper())
+            if (tipo, unidad, round(peso, 4), visible, fam) != antes:
+                p.tipo, p.unidad, p.peso_kg, p.visible, p.familia, p.editado = tipo, unidad, peso, visible, fam, True
         s.commit()
     vuelta = form.get("_volver") or "/cotizaciones/productos"
     return _ui["volver"](request, vuelta if vuelta.startswith("/cotizaciones") else "/cotizaciones/productos",

@@ -71,6 +71,10 @@ button.prim:disabled{opacity:.5;cursor:default}
 .chip.no{background:var(--amarillo-bg);color:var(--amarillo)}
 .chip.may{background:#efe6da;color:var(--cafe)}
 .aviso{background:var(--amarillo-bg);color:var(--amarillo);border-radius:9px;padding:9px 12px;font-size:14px;margin:10px 0 0}
+.reglas{background:var(--fondo);border-radius:9px;padding:9px 12px;margin:-6px 0 12px;font-size:14px}
+.reglas summary{cursor:pointer;font-weight:600;color:var(--cafe)}
+.reglas ul{margin:8px 0 2px;padding-left:18px}
+.reglas li{margin:4px 0}
 .aviso.ok{background:var(--verde-bg);color:var(--verde)}
 .totales{margin-top:12px;border-top:2px solid var(--linea);padding-top:10px;font-variant-numeric:tabular-nums}
 .totales div{display:flex;justify-content:space-between;padding:3px 0}
@@ -126,11 +130,19 @@ button.prim:disabled{opacity:.5;cursor:default}
 
 <section>
   <h2><span class="num">2</span>Elige tus productos</h2>
-  <p class="sub">Precios netos (+ IVA). Hilados: precio por mayor desde {{ reglas.kg_hilado|round|int }} kg en total. Vellón: desde {{ reglas.kg_vellon|round|int }} kg del mismo vellón.</p>
+  <p class="sub">Precios netos (+ IVA). El precio por mayor se aplica solo cuando cumples la regla:</p>
+  <details class="reglas"><summary>¿Cuándo hay precio por mayor?</summary>
+    <ul>
+      <li><b>Hilado por kilo:</b> {{ reglas.cot_kg_merino|int }} kg de un mismo merino, {{ reglas.cot_kg_corriedale|int }} kg de un mismo corriedale, o {{ reglas.cot_kg_hilado_surtido|int }} kg surtidos entre hilados.</li>
+      <li><b>Vellón natural:</b> {{ reglas.cot_kg_vellon_natural|int }} kg del mismo vellón.</li>
+      <li><b>Vellón teñido:</b> {{ reglas.cot_kg_tenido|int }} kg de un mismo color, o {{ reglas.cot_kg_tenido_surtido|int }} kg surtidos entre teñidos.</li>
+      <li><b>Ovillos (unidades):</b> de a {{ reglas.cot_un_bolsa|int }} por color, {{ reglas.cot_un_familia|int }} unidades de una misma línea, o {{ reglas.cot_un_surtido|int }} surtidas.</li>
+    </ul></details>
   <div class="buscar"><input id="q" type="search" placeholder="Busca por nombre o color: relmu, malal, mostaza…"></div>
   <div class="filtros" id="filtros">
     <button type="button" data-f="" class="on">Todos</button>
-    <button type="button" data-f="hilado">Hilados</button>
+    <button type="button" data-f="hilado">Hilado por kilo</button>
+    <button type="button" data-f="un">Ovillos</button>
     <button type="button" data-f="vellon">Vellón</button>
     <button type="button" data-f="otro">Otros</button>
   </div>
@@ -157,6 +169,8 @@ button.prim:disabled{opacity:.5;cursor:default}
 
 <script>
 const PRODUCTOS = {{ productos|tojson }};
+const BOLSA = {{ reglas.cot_un_bolsa|int }};
+const pasaFiltro = p => !filtro || (filtro === "un" ? p.unidad === "un" : filtro === "hilado" ? p.unidad === "kg" && p.tipo.startsWith("hilado") : p.tipo.startsWith(filtro));
 const VENDEDOR = {{ v|tojson }};
 const POR = Object.fromEntries(PRODUCTOS.map(p => [p.codigo, p]));
 const $ = id => document.getElementById(id);
@@ -199,7 +213,7 @@ function datosCliente() {
 // ---- catálogo ----
 function pintarProductos() {
   const q = norm($("q").value).split(/\s+/).filter(Boolean);
-  const lista = PRODUCTOS.filter(p => (!filtro || p.tipo === filtro) && q.every(w => norm(p.nombre + " " + p.codigo).includes(w)));
+  const lista = PRODUCTOS.filter(p => pasaFiltro(p) && q.every(w => norm(p.nombre + " " + p.codigo).includes(w)));
   const cont = $("prods");
   cont.innerHTML = "";
   if (!PRODUCTOS.length) { cont.innerHTML = '<div class="vacio">Estamos actualizando la lista de productos. Vuelve a intentarlo más tarde o escríbenos.</div>'; return; }
@@ -217,8 +231,8 @@ function pintarProductos() {
     info.append(nom, cod, pre);
     const ag = document.createElement("div"); ag.className = "agregar";
     const inp = document.createElement("input");
-    inp.type = "number"; inp.min = p.unidad === "kg" ? "0.5" : "1"; inp.step = p.unidad === "kg" ? "0.5" : "1";
-    inp.value = p.unidad === "kg" ? "1" : "10"; inp.inputMode = "decimal"; inp.setAttribute("aria-label", "Cantidad");
+    inp.type = "number"; inp.min = p.unidad === "kg" ? "0.5" : "1"; inp.step = p.unidad === "kg" ? "0.5" : String(BOLSA);
+    inp.value = p.unidad === "kg" ? "1" : String(BOLSA); inp.inputMode = "decimal"; inp.setAttribute("aria-label", "Cantidad");
     const un = document.createElement("span"); un.textContent = u;
     const bt = document.createElement("button"); bt.className = "prim"; bt.type = "button"; bt.textContent = "Agregar";
     bt.onclick = () => agregar(p.codigo, parseFloat(String(inp.value).replace(",", ".")));
@@ -275,7 +289,7 @@ function pintarCarro() {
     const tot = document.createElement("div"); tot.className = "tot"; tot.textContent = l ? clp(l.total) : "";
     const ctl = document.createElement("div"); ctl.className = "ctl";
     const inp = document.createElement("input");
-    inp.type = "number"; inp.value = x.cantidad; inp.step = p.unidad === "kg" ? "0.5" : "1"; inp.min = "0"; inp.inputMode = "decimal";
+    inp.type = "number"; inp.value = x.cantidad; inp.step = p.unidad === "kg" ? "0.5" : String(BOLSA); inp.min = "0"; inp.inputMode = "decimal";
     inp.setAttribute("aria-label", "Cantidad");
     inp.onchange = () => { const v = parseFloat(String(inp.value).replace(",", ".")); if (v > 0) { x.cantidad = v; } else { carro.splice(i, 1); } cambio(); };
     const un = document.createElement("span"); un.className = "det"; un.textContent = p.unidad === "kg" ? "kg" : "un";
@@ -290,10 +304,9 @@ function pintarCarro() {
     cont.append(el);
   });
   if (calculo && calculo.lineas) {
-    if (calculo.falta_hilado_kg > 0)
-      av.insertAdjacentHTML("beforeend", `<div class="aviso">Llevas ${String(calculo.kg_hilado).replace(".", ",")} kg de hilado. Con ${String(calculo.falta_hilado_kg).replace(".", ",")} kg más, todo el hilado pasa a precio por mayor.</div>`);
-    else if (calculo.hilado_mayor)
-      av.insertAdjacentHTML("beforeend", '<div class="aviso ok">¡Tu hilado ya va con precio por mayor!</div>');
+    (calculo.consejos || []).forEach(t => { const d = document.createElement("div"); d.className = "aviso"; d.textContent = t; av.append(d); });
+    if (!(calculo.consejos || []).length && calculo.lineas.some(l => l.por_mayor))
+      av.insertAdjacentHTML("beforeend", '<div class="aviso ok">¡Tu pedido ya va con precio por mayor!</div>');
     if (calculo.lineas.some(l => l.disponible === false))
       av.insertAdjacentHTML("beforeend", '<div class="aviso">Algunos productos no tienen stock hoy. Puedes cotizarlos igual: el stock se confirma al momento de comprar.</div>');
     $("t-neto").textContent = clp(calculo.neto); $("t-iva").textContent = clp(calculo.iva); $("t-total").textContent = clp(calculo.total);

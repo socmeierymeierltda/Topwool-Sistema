@@ -509,7 +509,8 @@ def ver_ajustes(request: Request):
         "Base de datos permanente": not config.DATABASE_URL.startswith("sqlite"),
         "Correo (envío a producción)": bool(config.SMTP_USER and config.SMTP_PASSWORD),
     }
-    return render(request, "ajustes.html", aj=db.ajustes(), estado=estado, correo=sheets.correo_servicio())
+    return render(request, "ajustes.html", aj=db.ajustes(), estado=estado, correo=sheets.correo_servicio(),
+                  reglas=[(k, d) for k, (_, d) in cotizador.REGLAS.items()])
 
 
 @app.post("/ajustes")

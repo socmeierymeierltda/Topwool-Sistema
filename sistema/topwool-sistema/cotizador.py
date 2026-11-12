@@ -20,7 +20,8 @@ class Producto(db.Base):
     __tablename__ = "cot_productos"
     codigo = Column(String(120), primary_key=True)
     nombre = Column(String(250))
-    tipo = Column(String(20))            # hilado | vellon | otro
+    tipo = Column(String(30))            # hilado_merino | hilado_corriedale | vellon_natural | vellon_tenido | otro
+    familia = Column(String(80))         # Malal, Relmu, Coirón… (para la regla de unidades)
     unidad = Column(String(10))          # kg | un
     peso_kg = Column(Float, default=1.0)  # kilos que pesa 1 unidad (0,1 para ovillos de 100 g)
     precio_mayor = Column(Float)         # lista "Base" (neto)
@@ -110,21 +111,42 @@ def rut_formato(rut: str) -> str:
     return f"{cuerpo}-{r[-1]}"
 
 
+TIPOS = [("hilado_corriedale", "Hilado corriedale"), ("hilado_merino", "Hilado merino"),
+         ("vellon_natural", "Vellón natural"), ("vellon_tenido", "Vellón teñido"), ("otro", "Otro")]
+_RELLENO = {"hilado", "hilados", "industrial", "artesanal", "ovillo", "ovillos", "lana", "de", "del", "la", "el",
+            "vellon", "natural", "tenido", "100", "50", "gr", "g", "grs", "kg", "un"}
+
+
+def tipo_normal(t):
+    """Compatibilidad con la primera versión (hilado / vellon)."""
+    return {"hilado": "hilado_corriedale", "vellon": "vellon_natural"}.get(t or "", t or "otro")
+
+
+def adivinar_familia(nombre: str) -> str:
+    for w in norm(nombre).replace("-", " ").split():
+        if w not in _RELLENO and not w.isdigit() and len(w) > 1:
+            return w.upper()
+    return ""
+
+
 def clasificar(codigo: str, nombre: str):
-    """Adivina tipo y unidad; se puede corregir a mano en la pantalla de productos."""
+    """Adivina tipo, unidad y familia; se corrige a mano en la pantalla de productos."""
     n = norm(nombre)
     if "vell" in n:
-        tipo = "vellon"
-    elif any(p in n for p in ("hilad", "lana", "algod", "sock", "merino", "ovillo", "hilo")):
-        tipo = "hilado"
+        tipo = "vellon_tenido" if any(p in n for p in ("teni", "color")) else "vellon_natural"
+    elif "merino" in n or "sock" in n:
+        tipo = "hilado_merino"
+    elif any(p in n for p in ("hilad", "lana", "ovillo", "hilo", "corriedale", "algod")):
+        tipo = "hilado_corriedale"
     else:
         tipo = "otro"
     c = (codigo or "").upper()
+    fam = adivinar_familia(nombre)
     if c.endswith("100"):
-        return tipo, "un", 0.1
+        return tipo, "un", 0.1, fam
     if c.endswith("50"):
-        return tipo, "un", 0.05
-    return tipo, "kg", 1.0
+        return tipo, "un", 0.05, fam
+    return tipo, "kg", 1.0, fam
 
 
 # ---------- lista de precios ----------
@@ -189,8 +211,9 @@ def guardar_lista(items):
         for it in items:
             p = actuales.get(it["codigo"])
             if p is None:
-                tipo, unidad, peso = clasificar(it["codigo"], it["nombre"])
-                p = Producto(codigo=it["codigo"], tipo=tipo, unidad=unidad, peso_kg=peso, visible=True, editado=False)
+                tipo, unidad, peso, fam = clasificar(it["codigo"], it["nombre"])
+                p = Producto(codigo=it["codigo"], tipo=tipo, unidad=unidad, peso_kg=peso, familia=fam,
+                             visible=True, editado=False)
                 s.add(p)
                 nuevos += 1
             else:
@@ -222,74 +245,128 @@ def fecha_stock():
 
 
 # ---------- catálogo y cálculo ----------
+REGLAS = {   # clave en Ajustes → (valor por defecto, descripción)
+    "cot_kg_corriedale": (10, "Hilado corriedale: kg del mismo hilado"),
+    "cot_kg_merino": (5, "Hilado merino: kg del mismo hilado"),
+    "cot_kg_hilado_surtido": (10, "Hilados surtidos (industriales y artesanales): kg en total"),
+    "cot_kg_vellon_natural": (10, "Vellón natural: kg del mismo vellón"),
+    "cot_kg_tenido": (5, "Vellón teñido: kg de un mismo color"),
+    "cot_kg_tenido_surtido": (10, "Vellón teñido surtido: kg en total"),
+    "cot_un_bolsa": (10, "Unidades: de a cuántas por color (bolsa cerrada)"),
+    "cot_un_familia": (50, "Unidades: de una misma familia"),
+    "cot_un_surtido": (100, "Unidades surtidas: en total"),
+}
+
+
 def ajustes_cot(aj):
-    def f(k, d):
+    out = {}
+    for k, (d, _) in REGLAS.items():
         try:
-            return float(str(aj.get(k, d)).replace(",", "."))
+            out[k] = float(str(aj.get(k, d)).replace(",", "."))
         except ValueError:
-            return d
-    return {"kg_hilado": f("cot_mayor_kg_hilado", 10), "kg_vellon": f("cot_mayor_kg_vellon", 10)}
+            out[k] = float(d)
+    return out
 
 
 def catalogo_publico():
     """Lo que ve la clienta: sin cantidades de stock."""
     with db.Session() as s:
         prods = list(s.scalars(select(Producto).where(Producto.visible.is_(True)).order_by(Producto.nombre)))
-    return [{"codigo": p.codigo, "nombre": p.nombre, "tipo": p.tipo, "unidad": p.unidad, "peso_kg": p.peso_kg or 1,
+    return [{"codigo": p.codigo, "nombre": p.nombre, "tipo": tipo_normal(p.tipo), "unidad": p.unidad,
+             "familia": (p.familia or "").upper(), "peso_kg": p.peso_kg or 1,
              "detalle": round(p.precio_detalle or p.precio_mayor or 0),
              "mayor": round(p.precio_mayor or p.precio_detalle or 0)}
             for p in prods if (p.precio_detalle or p.precio_mayor)]
 
 
+def _fmt(n):
+    return f"{n:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
 def calcular(pedido, aj):
-    """pedido: [{codigo, cantidad}] → líneas con precio aplicado, disponibilidad y totales."""
-    reglas = ajustes_cot(aj)
+    """pedido: [{codigo, cantidad}] → líneas con precio aplicado, disponibilidad, totales y consejos."""
+    R = ajustes_cot(aj)
+    E = 1e-9
     codigos = [str(x.get("codigo", "")).upper() for x in pedido]
     with db.Session() as s:
         prods = {p.codigo: p for p in s.scalars(select(Producto).where(Producto.codigo.in_(codigos)))}
         stock = {x.codigo: x.saldo for x in s.scalars(select(Stock).where(Stock.codigo.in_(codigos)))}
         hay_stock = s.scalars(select(Stock).limit(1)).first() is not None
-    lineas = []
+    juntas = {}
     for x in pedido:
         p = prods.get(str(x.get("codigo", "")).upper())
         cant = _num(x.get("cantidad")) or 0
         if not p or not p.visible or cant <= 0:
             continue
-        if p.unidad == "un":
-            cant = float(int(round(cant)))
-        else:
-            cant = round(cant, 2)
-        if cant <= 0:
-            continue
-        lineas.append({"codigo": p.codigo, "nombre": p.nombre, "tipo": p.tipo, "unidad": p.unidad,
-                       "cantidad": cant, "kg": cant * (p.peso_kg or 1),
+        cant = float(int(round(cant))) if p.unidad == "un" else round(cant, 2)
+        if cant > 0:
+            juntas[p.codigo] = juntas.get(p.codigo, 0) + cant
+    lineas = []
+    for cod, cant in juntas.items():
+        p = prods[cod]
+        lineas.append({"codigo": p.codigo, "nombre": p.nombre, "tipo": tipo_normal(p.tipo), "unidad": p.unidad,
+                       "familia": (p.familia or p.codigo).upper(), "cantidad": cant,
                        "_mayor": p.precio_mayor or p.precio_detalle or 0,
-                       "_detalle": p.precio_detalle or p.precio_mayor or 0,
-                       "disponible": (stock.get(p.codigo, 0) >= cant - 1e-9) if hay_stock else None})
-    kg_hilado = sum(l["kg"] for l in lineas if l["tipo"] == "hilado")
-    hilado_mayor = kg_hilado >= reglas["kg_hilado"] - 1e-9
-    kg_por_vellon = {}
-    for l in lineas:
-        if l["tipo"] == "vellon":
-            kg_por_vellon[l["codigo"]] = kg_por_vellon.get(l["codigo"], 0) + l["kg"]
+                       "_detalle": p.precio_detalle or p.precio_mayor or 0, "por_mayor": False,
+                       "disponible": (stock.get(p.codigo, 0) >= cant - E) if hay_stock else None})
+    consejos = []
+    granel = [l for l in lineas if l["unidad"] == "kg"]
+    unid = [l for l in lineas if l["unidad"] == "un" and l["tipo"] != "otro"]
+
+    # --- granel: hilados ---
+    hil = [l for l in granel if l["tipo"].startswith("hilado")]
+    kg_hil = sum(l["cantidad"] for l in hil)
+    surtido_hil = kg_hil >= R["cot_kg_hilado_surtido"] - E
+    for l in hil:
+        minimo = R["cot_kg_merino"] if l["tipo"] == "hilado_merino" else R["cot_kg_corriedale"]
+        l["por_mayor"] = surtido_hil or l["cantidad"] >= minimo - E
+    if hil and not surtido_hil:
+        falta = R["cot_kg_hilado_surtido"] - kg_hil
+        consejos.append(f"Llevas {_fmt(kg_hil)} kg de hilado. Con {_fmt(falta)} kg más (puedes mezclar colores y "
+                        "líneas), todo tu hilado pasa a precio por mayor.")
+
+    # --- granel: vellón ---
+    for l in granel:
+        if l["tipo"] == "vellon_natural":
+            l["por_mayor"] = l["cantidad"] >= R["cot_kg_vellon_natural"] - E
+    ten = [l for l in granel if l["tipo"] == "vellon_tenido"]
+    kg_ten = sum(l["cantidad"] for l in ten)
+    surtido_ten = kg_ten >= R["cot_kg_tenido_surtido"] - E
+    for l in ten:
+        l["por_mayor"] = surtido_ten or l["cantidad"] >= R["cot_kg_tenido"] - E
+    if ten and not surtido_ten and not all(l["por_mayor"] for l in ten):
+        consejos.append(f"Llevas {_fmt(kg_ten)} kg de vellón teñido. Con {_fmt(R['cot_kg_tenido_surtido'] - kg_ten)} kg "
+                        "más surtidos entre colores, todo pasa a precio por mayor.")
+
+    # --- unidades (cordonería) ---
+    bolsa = int(R["cot_un_bolsa"]) or 1
+    validas = [l for l in unid if int(l["cantidad"]) % bolsa == 0]
+    sueltas = [l for l in unid if int(l["cantidad"]) % bolsa != 0]
+    un_total = sum(l["cantidad"] for l in validas)
+    surtido_un = un_total >= R["cot_un_surtido"] - E
+    por_fam = {}
+    for l in validas:
+        por_fam[l["familia"]] = por_fam.get(l["familia"], 0) + l["cantidad"]
+    for l in validas:
+        l["por_mayor"] = surtido_un or por_fam[l["familia"]] >= R["cot_un_familia"] - E
+    if sueltas:
+        consejos.append(f"Para precio por mayor en unidades, cada color va de a {bolsa} (bolsas cerradas). "
+                        "Los que no son múltiplo de " + str(bolsa) + " quedan a precio detalle.")
+    if validas and not surtido_un:
+        cerca = [(f, n) for f, n in por_fam.items() if n < R["cot_un_familia"]]
+        if cerca and not all(l["por_mayor"] for l in validas):
+            f, n = max(cerca, key=lambda x: x[1])
+            consejos.append(f"Llevas {int(n)} unidades de {f.title()}: con {int(R['cot_un_familia'] - n)} más de la misma "
+                            f"familia, o llegando a {int(R['cot_un_surtido'])} surtidas, pasan a precio por mayor.")
+
     neto = 0
     for l in lineas:
-        if l["tipo"] == "hilado":
-            mayor = hilado_mayor
-        elif l["tipo"] == "vellon":
-            mayor = kg_por_vellon[l["codigo"]] >= reglas["kg_vellon"] - 1e-9
-        else:
-            mayor = False
-        l["por_mayor"] = mayor
-        l["precio"] = round(l["_mayor"] if mayor else l["_detalle"])
+        l["precio"] = round(l["_mayor"] if l["por_mayor"] else l["_detalle"])
         l["total"] = round(l["precio"] * l["cantidad"])
         neto += l["total"]
         del l["_mayor"], l["_detalle"]
     iva = round(neto * IVA)
-    falta_hilado = max(0, reglas["kg_hilado"] - kg_hilado) if kg_hilado and not hilado_mayor else 0
-    return {"lineas": lineas, "neto": neto, "iva": iva, "total": neto + iva,
-            "kg_hilado": round(kg_hilado, 2), "hilado_mayor": hilado_mayor,
-            "falta_hilado_kg": round(falta_hilado, 2), "reglas": reglas}
+    return {"lineas": lineas, "neto": neto, "iva": iva, "total": neto + iva, "consejos": consejos}
 
 
 def guardar_cotizacion(datos: dict, calculo: dict, vendedor: str) -> Cotizacion:

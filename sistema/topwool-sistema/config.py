@@ -61,9 +61,10 @@ DEFAULTS = {
     # Cobranza
     "vendedores": "javier=javier, maria de los angeles=maria, mariajesus=jesu, manuel=manuel, cris=cris",
     "palabras_pagado": "efect, efectivo, pagado",
-    # Cotizador: desde cuántos kilos se cobra precio por mayor (lista Base)
-    "cot_mayor_kg_hilado": "10",
-    "cot_mayor_kg_vellon": "10",
+    # Cotizador: mínimos para precio por mayor (lista Base)
+    "cot_kg_corriedale": "10", "cot_kg_merino": "5", "cot_kg_hilado_surtido": "10",
+    "cot_kg_vellon_natural": "10", "cot_kg_tenido": "5", "cot_kg_tenido_surtido": "10",
+    "cot_un_bolsa": "10", "cot_un_familia": "50", "cot_un_surtido": "100",
     "link_fedex": "https://www.fedex.com/fedextrack/?trknbr={n}",
     "link_blue": "https://www.blue.cl/seguimiento/?n_seguimiento={n}",
     "link_starken": "https://www.starken.cl/seguimiento?codigo={n}",
