@@ -25,7 +25,7 @@ tpl.env.globals["zip"] = zip
 tpl.env.filters["clp"] = lambda v: "$" + f"{float(v or 0):,.0f}".replace(",", ".")
 tpl.env.filters["num"] = lambda v: "" if v is None else (f"{v:,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", ".") if isinstance(v, float) else v)
 
-ULTIMA_COMPARACION = {"filas": [], "fecha": None, "archivo": ""}
+ULTIMA_COMPARACION = {"filas": [], "fecha": None, "archivo": "", "trabajo": {}}
 
 
 @app.on_event("startup")
@@ -407,41 +407,81 @@ def descargar_equivalencias():
 def ver_inventario(request: Request, solo: str = "dif"):
     filas = ULTIMA_COMPARACION["filas"]
     vista = [f for f in filas if f["difiere"]] if solo == "dif" else filas
+    trabajo = dict(ULTIMA_COMPARACION.get("trabajo") or {})
+    if trabajo.get("estado") in ("listo", "error") and not trabajo.get("mostrado"):
+        ULTIMA_COMPARACION["trabajo"]["mostrado"] = True
+        if trabajo["estado"] == "listo":
+            request.session["aviso"] = trabajo.get("mensaje")
+        else:
+            request.session["error"] = trabajo.get("mensaje")
     return render(request, "inventario.html", filas=vista, total=len(filas),
-                  n_dif=sum(1 for f in filas if f["difiere"]), solo=solo,
+                  n_dif=sum(1 for f in filas if f["difiere"]), solo=solo, trabajo=trabajo,
                   fecha=ULTIMA_COMPARACION["fecha"], archivo=ULTIMA_COMPARACION["archivo"])
+
+
+def _en_segundo_plano(funcion):
+    """Corre una tarea larga sin hacer esperar a la página (así Render no corta con error 502)."""
+    import threading
+    ULTIMA_COMPARACION["trabajo"] = {"estado": "procesando", "mensaje": "Empezando…", "inicio": datetime.now()}
+
+    def avance(txt):
+        ULTIMA_COMPARACION["trabajo"]["mensaje"] = txt
+
+    def correr():
+        try:
+            msg = funcion(avance)
+            ULTIMA_COMPARACION["trabajo"].update(estado="listo", mensaje=msg)
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            ULTIMA_COMPARACION["trabajo"].update(estado="error", mensaje=f"No se pudo terminar: {str(e)[:250]}")
+    threading.Thread(target=correr, daemon=True).start()
+
+
+def _ocupado():
+    return (ULTIMA_COMPARACION.get("trabajo") or {}).get("estado") == "procesando"
 
 
 @app.post("/inventario/comparar")
 async def comparar_inventario(request: Request, archivo: UploadFile = File(...)):
+    if _ocupado():
+        return volver(request, "/inventario", error="Ya hay una tarea en curso; espera a que termine.")
     try:
         saldos = inventario.leer_inventario_defontana(await archivo.read())
-        catalogo = woo.catalogo()
-        ULTIMA_COMPARACION.update(filas=inventario.comparar(saldos, catalogo), fecha=datetime.now(),
-                                  archivo=archivo.filename)
     except Exception as e:  # noqa: BLE001
-        traceback.print_exc()
-        return volver(request, "/inventario", error=f"No pude comparar: {e}")
-    return volver(request, "/inventario", aviso=f"Leí {len(saldos)} artículos de Defontana.")
+        return volver(request, "/inventario", error=f"No pude leer el archivo de Defontana: {e}")
+    nombre = archivo.filename
+
+    def tarea(avance):
+        avance(f"Leí {len(saldos)} artículos de Defontana. Leyendo el stock de la web…")
+        catalogo = woo.catalogo(avance)
+        ULTIMA_COMPARACION.update(filas=inventario.comparar(saldos, catalogo), fecha=datetime.now(), archivo=nombre)
+        n_dif = sum(1 for f in ULTIMA_COMPARACION["filas"] if f["difiere"])
+        return f"Comparación lista: {len(saldos)} artículos de Defontana, {n_dif} productos con diferencia."
+    _en_segundo_plano(tarea)
+    return RedirectResponse("/inventario", status_code=303)
 
 
 @app.post("/inventario/actualizar")
 async def actualizar_inventario(request: Request):
+    if _ocupado():
+        return volver(request, "/inventario", error="Ya hay una tarea en curso; espera a que termine.")
     form = await request.form()
     elegidos = {int(x) for x in form.getlist("ids")}
     cambios = [{"id": f["woo_id"], "parent": f["parent"], "stock": f["deberia"]}
                for f in ULTIMA_COMPARACION["filas"] if f["woo_id"] in elegidos and f["en_web"]]
     if not cambios:
         return volver(request, "/inventario", error="No elegiste productos para actualizar.")
-    try:
+
+    def tarea(avance):
+        avance(f"Actualizando {len(cambios)} productos en la web…")
         n = woo.actualizar_stock(cambios)
-    except Exception as e:  # noqa: BLE001
-        return volver(request, "/inventario", error=f"WooCommerce rechazó la actualización: {e}")
-    for f in ULTIMA_COMPARACION["filas"]:
-        if f["woo_id"] in elegidos:
-            f["actual"], f["difiere"] = f["deberia"], False
-    extra = " (modo demo: no se cambió la web)" if config.DEMO else ""
-    return volver(request, "/inventario", aviso=f"Stock actualizado en {n} productos de la web{extra}.")
+        for f in ULTIMA_COMPARACION["filas"]:
+            if f["woo_id"] in elegidos:
+                f["actual"], f["difiere"] = f["deberia"], False
+        extra = " (modo demo: no se cambió la web)" if config.DEMO else ""
+        return f"Stock actualizado en {n} productos de la web{extra}."
+    _en_segundo_plano(tarea)
+    return RedirectResponse("/inventario", status_code=303)
 
 
 # ---------- cobranza ----------

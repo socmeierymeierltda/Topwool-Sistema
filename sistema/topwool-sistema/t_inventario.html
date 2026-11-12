@@ -3,6 +3,10 @@
 <h1>Inventario</h1>
 <p class="sub">Sube el Informe de Inventario de Defontana del día. El sistema suma todas las bodegas, lo compara con el stock de la web y te deja actualizar los que no calzan.</p>
 
+{% if trabajo.estado == 'procesando' %}
+<meta http-equiv="refresh" content="4">
+<div class="msg demo">⏳ {{ trabajo.mensaje }} — esta página se actualiza sola, puedes esperar aquí o volver en un rato.</div>
+{% endif %}
 <div class="tarjeta">
   <form class="subir" method="post" action="/inventario/comparar" enctype="multipart/form-data">
     <b>Inventario Defontana</b>
@@ -33,7 +37,7 @@
 </tr>
 {% endfor %}
 </table></div>
-<div class="acciones"><button>Actualizar stock en la web de los marcados</button></div>
+<div class="acciones"><button {{ 'disabled' if trabajo.estado == 'procesando' }}>Actualizar stock en la web de los marcados</button></div>
 </form>
 {% else %}<div class="vacio">Todo calza: el stock de la web coincide con Defontana.</div>{% endif %}
 {% elif not fecha %}<div class="vacio">Sube el informe de inventario para ver las diferencias.</div>{% endif %}

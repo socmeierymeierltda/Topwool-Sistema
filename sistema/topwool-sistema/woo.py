@@ -102,37 +102,55 @@ def cancelar(order_id, nota):
         c.post(f"orders/{order_id}/notes", json={"note": nota, "customer_note": False})
 
 
-def catalogo():
-    """Todos los productos y variaciones con su stock: {id: {...}}."""
+def catalogo(progreso=None):
+    """Todos los productos y variaciones con su stock: {id: {...}}.
+    Pide solo los campos necesarios y lee las variaciones en paralelo (antes tardaba minutos)."""
     if config.DEMO:
         return {}
-    items = {}
+    from concurrent.futures import ThreadPoolExecutor
+    campos = "id,name,sku,type,stock_quantity,manage_stock"
+    items, variables = {}, []
     with _client() as c:
         page = 1
         while True:
-            r = c.get("products", params={"per_page": 100, "page": page})
+            r = c.get("products", params={"per_page": 100, "page": page, "_fields": campos, "status": "any"})
             r.raise_for_status()
             data = r.json()
             for p in data:
                 items[p["id"]] = {"id": p["id"], "parent": 0, "nombre": p["name"], "sku": p.get("sku"),
                                   "stock": p.get("stock_quantity"), "maneja": p.get("manage_stock")}
                 if p.get("type") == "variable":
-                    vp = 1
-                    while True:
-                        rv = c.get(f"products/{p['id']}/variations", params={"per_page": 100, "page": vp})
-                        rv.raise_for_status()
-                        vs = rv.json()
-                        for v in vs:
-                            items[v["id"]] = {"id": v["id"], "parent": p["id"],
-                                              "nombre": p["name"] + " - " + ", ".join(a.get("option", "") for a in v.get("attributes", [])),
-                                              "sku": v.get("sku"), "stock": v.get("stock_quantity"),
-                                              "maneja": v.get("manage_stock")}
-                        if len(vs) < 100:
-                            break
-                        vp += 1
+                    variables.append(p)
             if len(data) < 100:
                 break
             page += 1
+
+    def variaciones(p):
+        out = []
+        with _client() as cv:
+            vp = 1
+            while True:
+                rv = cv.get(f"products/{p['id']}/variations",
+                            params={"per_page": 100, "page": vp, "_fields": "id,sku,stock_quantity,manage_stock,attributes"})
+                rv.raise_for_status()
+                vs = rv.json()
+                for v in vs:
+                    out.append({"id": v["id"], "parent": p["id"],
+                                "nombre": p["name"] + " - " + ", ".join(a.get("option", "") for a in v.get("attributes", [])),
+                                "sku": v.get("sku"), "stock": v.get("stock_quantity"), "maneja": v.get("manage_stock")})
+                if len(vs) < 100:
+                    break
+                vp += 1
+        return out
+
+    hechos = 0
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        for vs in ex.map(variaciones, variables):
+            for v in vs:
+                items[v["id"]] = v
+            hechos += 1
+            if progreso:
+                progreso(f"Leyendo la web: {hechos} de {len(variables)} productos con variaciones")
     return items
 
 
