@@ -1,7 +1,7 @@
 {% extends "t_base.html" %}
 {% block contenido %}
 <h1>Cobranza</h1>
-<p class="sub">Todas las ventas con documento: lo pagado, lo abonado y lo que falta por cobrar. Sube cada día los PDF de documentos y despachos.</p>
+<p class="sub">Todas las ventas con documento: lo pagado, lo abonado y lo que falta por cobrar. Sube cada día los PDF de documentos y despachos. <a href="/cobranza/meses">Ver resumen por mes →</a></p>
 
 <div class="grilla" style="margin-bottom:14px">
   <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Por cobrar (filtro actual)</span><div style="font-size:26px;font-weight:800;color:var(--rojo)">{{ tot.debe|clp }}</div></div>
@@ -49,6 +49,10 @@
     {% for v in vendedores %}<option {{ 'selected' if f.vendedor==v }}>{{ v }}</option>{% endfor %}
   </select>
   <input name="q" value="{{ f.q }}" placeholder="Cliente, RUT, folio o comentario" style="max-width:240px">
+  <select name="mes" title="Mes" onchange="if(this.value){this.form.desde.value='';this.form.hasta.value='';}">
+    <option value="">Cualquier mes</option>
+    {% for k, n in meses_opc %}<option value="{{ k }}" {{ 'selected' if mes==k }}>{{ n }}</option>{% endfor %}
+  </select>
   <input type="date" name="desde" value="{{ f.desde }}" style="max-width:150px" title="Desde">
   <input type="date" name="hasta" value="{{ f.hasta }}" style="max-width:150px" title="Hasta">
   {% if f.revisar %}<input type="hidden" name="revisar" value="1">{% endif %}

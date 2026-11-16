@@ -56,7 +56,9 @@ def _vendedores(s):
 
 @router.get("/cobranza", response_class=HTMLResponse)
 def ver(request: Request, estado: str = "", vendedor: str = "", q: str = "", desde: str = "", hasta: str = "",
-        revisar: str = ""):
+        revisar: str = "", mes: str = ""):
+    if mes:   # "2026-10" → todo octubre
+        desde, hasta = _limites_mes(mes)
     with db.Session() as s:
         lista = filas(s, estado, vendedor, q, desde, hasta, bool(revisar))
         vendedores = _vendedores(s)
@@ -71,10 +73,98 @@ def ver(request: Request, estado: str = "", vendedor: str = "", q: str = "", des
         if f["debe"]:
             por_vendedor[f["d"].vendedor or "—"] = por_vendedor.get(f["d"].vendedor or "—", 0) + f["debe"]
     filtros = {"estado": estado, "vendedor": vendedor, "q": q, "desde": desde, "hasta": hasta, "revisar": revisar}
+    meses_opc = _ultimos_meses(24)
     return _render(request, "cobranza.html", lista=lista[:500], n=len(lista), tot=tot, vendedores=vendedores,
                    por_vendedor=sorted(por_vendedor.items(), key=lambda x: -x[1]), f=filtros, sin_doc=sin_doc,
-                   n_revisar=n_revisar, por_avisar=por_avisar,
+                   n_revisar=n_revisar, por_avisar=por_avisar, meses_opc=meses_opc, mes=mes,
                    qs="&".join(f"{k}={v}" for k, v in filtros.items() if v))
+
+
+MESES_ES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
+            "octubre", "noviembre", "diciembre"]
+
+
+def _limites_mes(mes):
+    y, m = int(mes[:4]), int(mes[5:7])
+    fin = date(y + (m == 12), 1 if m == 12 else m + 1, 1)
+    return date(y, m, 1).isoformat(), date.fromordinal(fin.toordinal() - 1).isoformat()
+
+
+def _ultimos_meses(n):
+    hoy = date.today()
+    out = []
+    y, m = hoy.year, hoy.month
+    for _ in range(n):
+        out.append((f"{y}-{m:02d}", f"{MESES_ES[m - 1].capitalize()} {y}"))
+        y, m = (y - 1, 12) if m == 1 else (y, m - 1)
+    return out
+
+
+def resumen_mensual(s, vendedor="", meses=12):
+    """Por cada mes: lo vendido (documentos emitidos), lo cobrado (pagos recibidos ese mes)
+    y lo que todavía se debe de las ventas de ese mes."""
+    docs = {d.id: d for d in s.scalars(select(cb.Documento).where(cb.Documento.vendedor == vendedor) if vendedor
+                                       else select(cb.Documento))}
+    pagado_doc = {}
+    cobrado_mes = {}
+    for a in s.scalars(select(cb.Abono)):
+        if a.documento_id not in docs:
+            continue
+        pagado_doc[a.documento_id] = pagado_doc.get(a.documento_id, 0) + (a.monto or 0)
+        if a.fecha:
+            k = a.fecha.strftime("%Y-%m")
+            cobrado_mes[k] = cobrado_mes.get(k, 0) + (a.monto or 0)
+    filas_ = {k: {"mes": k, "nombre": n, "vendido": 0, "docs": 0, "cobrado": cobrado_mes.get(k, 0), "pendiente": 0}
+              for k, n in _ultimos_meses(meses)}
+    for d in docs.values():
+        if not d.fecha:
+            continue
+        k = d.fecha.strftime("%Y-%m")
+        if k in filas_:
+            filas_[k]["vendido"] += d.total or 0
+            filas_[k]["docs"] += 1
+            filas_[k]["pendiente"] += max(0, (d.total or 0) - pagado_doc.get(d.id, 0))
+    return list(filas_.values())
+
+
+@router.get("/cobranza/meses", response_class=HTMLResponse)
+def ver_meses(request: Request, vendedor: str = "", meses: int = 12):
+    with db.Session() as s:
+        lista = resumen_mensual(s, vendedor, meses)
+        vendedores = _vendedores(s)
+    tope = max([max(x["vendido"], x["cobrado"]) for x in lista] + [1])
+    tot = {k: sum(x[k] for x in lista) for k in ("vendido", "cobrado", "pendiente", "docs")}
+    return _render(request, "meses.html", lista=lista, vendedores=vendedores, vendedor=vendedor, meses=meses,
+                   tope=tope, tot=tot)
+
+
+@router.get("/cobranza/meses/exportar")
+def exportar_meses(vendedor: str = "", meses: int = 12):
+    import openpyxl
+    from openpyxl.styles import Font
+    with db.Session() as s:
+        lista = resumen_mensual(s, vendedor, meses)
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Por mes"
+    ws.append([f"Cobranza por mes{' — ' + vendedor if vendedor else ''}", f"generado {datetime.now():%d-%m-%Y %H:%M}"])
+    ws["A1"].font = Font(bold=True, size=13)
+    ws.append([])
+    ws.append(["Mes", "Documentos", "Vendido", "Cobrado en el mes", "Pendiente de ese mes"])
+    for c in ws[3]:
+        c.font = Font(bold=True)
+    for x in lista:
+        ws.append([x["nombre"], x["docs"], x["vendido"], x["cobrado"], x["pendiente"]])
+    for row in ws.iter_rows(min_row=4):
+        for c in row[2:5]:
+            c.number_format = '"$"#,##0'
+    ws.column_dimensions["A"].width = 18
+    for col in "BCDE":
+        ws.column_dimensions[col].width = 20
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return _descarga(buf, f"cobranza_por_mes_{date.today():%Y-%m-%d}", "xlsx")
 
 
 @router.post("/cobranza/subir")
@@ -644,7 +734,10 @@ def _descarga(buf, nombre, formato):
 
 
 @router.get("/cobranza/exportar")
-def exportar(formato: str = "xlsx", estado: str = "", vendedor: str = "", q: str = "", desde: str = "", hasta: str = ""):
+def exportar(formato: str = "xlsx", estado: str = "", vendedor: str = "", q: str = "", desde: str = "", hasta: str = "",
+             mes: str = ""):
+    if mes:
+        desde, hasta = _limites_mes(mes)
     with db.Session() as s:
         lista = filas(s, estado, vendedor, q, desde, hasta)
     titulo = "Cobranza" + (f" · {estado}" if estado else "") + (f" · {vendedor}" if vendedor else "")

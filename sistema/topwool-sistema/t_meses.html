@@ -1,0 +1,43 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<p><a href="/cobranza">← Cobranza</a></p>
+<h1>Cobranza por mes</h1>
+<p class="sub"><b>Vendido</b>: documentos emitidos ese mes. <b>Cobrado</b>: pagos y abonos recibidos ese mes (de ventas de cualquier fecha). <b>Pendiente</b>: lo que aún se debe de las ventas de ese mes.</p>
+
+<form class="filtros" method="get">
+  <select name="vendedor" style="max-width:220px">
+    <option value="">Todos los vendedores</option>
+    {% for v in vendedores %}<option {{ 'selected' if vendedor==v }}>{{ v }}</option>{% endfor %}
+  </select>
+  <select name="meses" style="max-width:160px">
+    {% for n in [6, 12, 24] %}<option value="{{ n }}" {{ 'selected' if meses==n }}>Últimos {{ n }} meses</option>{% endfor %}
+  </select>
+  <button class="sec">Ver</button>
+  <a class="boton sec" href="/cobranza/meses/exportar?vendedor={{ vendedor }}&meses={{ meses }}">Excel</a>
+</form>
+
+<div class="grilla" style="margin-bottom:14px">
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Vendido en el período</span><div style="font-size:24px;font-weight:800">{{ tot.vendido|clp }}</div><span class="sub" style="margin:0">{{ tot.docs }} documentos</span></div>
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Cobrado en el período</span><div style="font-size:24px;font-weight:800;color:var(--verde)">{{ tot.cobrado|clp }}</div></div>
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Aún pendiente de esas ventas</span><div style="font-size:24px;font-weight:800;color:var(--rojo)">{{ tot.pendiente|clp }}</div></div>
+</div>
+
+<div class="tabla-scroll"><table>
+<tr><th>Mes</th><th class="n">Docs.</th><th class="n">Vendido</th><th class="n">Cobrado</th><th class="n">Pendiente</th><th style="width:28%">Vendido / cobrado</th><th></th></tr>
+{% for x in lista %}
+<tr>
+<td><b>{{ x.nombre }}</b></td>
+<td class="n">{{ x.docs }}</td>
+<td class="n">{{ x.vendido|clp }}</td>
+<td class="n" style="color:var(--verde)">{{ x.cobrado|clp }}</td>
+<td class="n" style="{{ 'color:var(--rojo);font-weight:600' if x.pendiente }}">{{ x.pendiente|clp }}</td>
+<td>
+  <div title="Vendido {{ x.vendido|clp }}" style="height:7px;border-radius:4px;background:var(--cafe2);width:{{ (100*x.vendido/tope)|round }}%;min-width:{{ 2 if x.vendido else 0 }}px"></div>
+  <div title="Cobrado {{ x.cobrado|clp }}" style="height:7px;border-radius:4px;background:var(--verde);margin-top:3px;width:{{ (100*x.cobrado/tope)|round }}%;min-width:{{ 2 if x.cobrado else 0 }}px"></div>
+</td>
+<td><a class="boton sec chico" href="/cobranza?mes={{ x.mes }}{{ '&vendedor=' ~ vendedor if vendedor }}">Ver ventas</a></td>
+</tr>
+{% endfor %}
+</table></div>
+<p class="sub" style="margin-top:8px"><span style="display:inline-block;width:12px;height:7px;border-radius:3px;background:var(--cafe2)"></span> Vendido &nbsp; <span style="display:inline-block;width:12px;height:7px;border-radius:3px;background:var(--verde)"></span> Cobrado</p>
+{% endblock %}
