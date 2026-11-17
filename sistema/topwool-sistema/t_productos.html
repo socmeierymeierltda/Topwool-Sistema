@@ -1,0 +1,45 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Productos</h1>
+<p class="sub">La matriz oficial de Topwool: cada código de Defontana con su producto, color, catálogo, unidad, costo y condiciones de venta. El nombre que va en los pedidos a producción sale de aquí.</p>
+
+<div class="tarjeta">
+  <form class="subir" method="post" action="/productos/subir" enctype="multipart/form-data">
+    <b>Cargar matriz</b>
+    <input type="file" name="archivo" accept=".xlsx" required>
+    <button>Subir</button>
+    <a class="boton sec" href="/productos/exportar">Descargar Excel</a>
+  </form>
+  <p class="sub" style="margin:8px 0 0">El archivo "Base de datos matriz productos" (hojas Equivalencias, Condiciones y Matriz Productos). Al subirlo se actualizan los nombres en Equivalencias. Las abreviaturas (por ejemplo corriedale dk = cdk) se cambian en <a href="/ajustes">Ajustes</a>.</p>
+</div>
+
+{% if total %}
+<form class="filtros" method="get">
+  <input name="q" value="{{ f.q }}" placeholder="Código, descripción o color" style="max-width:240px">
+  <select name="catalogo" onchange="this.form.producto.value='';this.form.submit()"><option value="">Todos los catálogos</option>{% for c in catalogos %}<option {{ 'selected' if f.catalogo==c }}>{{ c }}</option>{% endfor %}</select>
+  <select name="producto"><option value="">Todos los productos</option>{% for p in prods %}<option {{ 'selected' if f.producto==p }}>{{ p }}</option>{% endfor %}</select>
+  <select name="web"><option value="">Web: todos</option><option value="si" {{ 'selected' if f.web=='si' }}>Está en la web</option><option value="no" {{ 'selected' if f.web=='no' }}>No está en la web</option></select>
+  <button class="sec">Filtrar</button>
+  <span class="sub" style="margin:0">{{ n }} de {{ total }}</span>
+</form>
+<div class="tabla-scroll"><table>
+<tr><th>Código</th><th>Producto · color</th><th>Nombre en pedidos</th><th>Catálogo</th><th>Unidad</th><th class="n">Costo</th><th class="n">Stock</th><th>Venta mínima</th><th>Web</th></tr>
+{% for p in lista %}
+<tr>
+<td style="font-size:12px">{{ p.codigo }}</td>
+<td>{{ p.producto or '—' }}{% if p.color %} · {{ p.color }}{% endif %}<br><span class="sub" style="font-size:12px">{{ p.descripcion }}</span></td>
+<td><b>{{ nombre_pedido(p) }}</b></td>
+<td>{{ p.catalogo }}<br><span class="sub" style="font-size:12px">{{ p.tipo }}</span></td>
+<td>{{ p.unidad }}</td>
+<td class="n">{{ p.costo_total|clp if p.costo_total else '' }}</td>
+<td class="n">{{ p.stock|num if p.stock is not none else '' }}</td>
+<td style="font-size:12px;max-width:260px" title="Mayorista: {{ p.cond_mayorista }}">Minorista: {{ p.cond_minorista or '—' }}</td>
+<td>{% if p.codigo in en_web %}<span class="chip flow">sí</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+{% if n > 600 %}<p class="sub">Se muestran 600. Usa los filtros o descarga el Excel.</p>{% endif %}
+{% else %}
+<div class="vacio">Sube la matriz de productos para empezar.</div>
+{% endif %}
+{% endblock %}

@@ -637,6 +637,74 @@ def exportar_informes(desde: str = "", hasta: str = ""):
     return _descarga(buf, f"informe_web_{d:%Y-%m-%d}_{h:%Y-%m-%d}", "xlsx")
 
 
+# ---------------- matriz de productos ----------------
+@router.get("/productos", response_class=HTMLResponse)
+def ver_productos(request: Request, q: str = "", catalogo: str = "", producto: str = "", web: str = ""):
+    import productos as pm
+    aj = db.ajustes()
+    with db.Session() as s:
+        todos = list(s.scalars(select(pm.Producto).order_by(pm.Producto.catalogo, pm.Producto.producto, pm.Producto.color)))
+        en_web = {(e.codigo_defontana or "").upper(): e for e in s.scalars(select(db.Equivalencia))}
+    catalogos = sorted({p.catalogo for p in todos if p.catalogo})
+    prods = sorted({p.producto for p in todos if p.producto and (not catalogo or p.catalogo == catalogo)}, key=cb.norm)
+    ql = cb.norm(q)
+    lista = [p for p in todos
+             if (not catalogo or p.catalogo == catalogo) and (not producto or p.producto == producto)
+             and (not ql or ql in cb.norm(f"{p.codigo} {p.descripcion} {p.producto} {p.color}"))
+             and (not web or (web == "si") == (p.codigo in en_web))]
+    return _render(request, "productos.html", lista=lista[:600], n=len(lista), total=len(todos), catalogos=catalogos,
+                   prods=prods, f={"q": q, "catalogo": catalogo, "producto": producto, "web": web},
+                   en_web=en_web, nombre_pedido=lambda p: pm.nombre(p, aj))
+
+
+@router.post("/productos/subir")
+async def subir_matriz(request: Request, archivo: UploadFile = File(...)):
+    import productos as pm
+    try:
+        with db.Session() as s:
+            res = pm.importar_matriz(s, await archivo.read())
+            s.flush()
+            n = pm.aplicar_a_equivalencias(s, db.ajustes())
+            s.commit()
+    except Exception as e:  # noqa: BLE001
+        return _volver(request, "/productos", error=f"No pude leer la matriz: {str(e)[:200]}")
+    return _volver(request, "/productos", aviso=f"Matriz cargada: {res['productos']} productos "
+                   f"({res['con_nombre']} con producto y color). Se actualizaron {n} nombres en Equivalencias.")
+
+
+@router.post("/productos/aplicar")
+def aplicar_matriz(request: Request):
+    import productos as pm
+    with db.Session() as s:
+        n = pm.aplicar_a_equivalencias(s, db.ajustes())
+        s.commit()
+    return _volver(request, "/equivalencias", aviso=f"Se pusieron los nombres de la matriz en {n} productos de la web.")
+
+
+@router.get("/productos/exportar")
+def exportar_productos():
+    import openpyxl
+    from openpyxl.styles import Font
+
+    import productos as pm
+    aj = db.ajustes()
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Productos"
+    ws.append(["Código", "Descripción", "Catálogo", "Tipo", "Producto", "Color", "Nombre en pedidos", "Unidad",
+               "Costo total", "Stock Defontana", "Condición mayorista", "Condición minorista"])
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    with db.Session() as s:
+        for p in s.scalars(select(pm.Producto).order_by(pm.Producto.catalogo, pm.Producto.producto)):
+            ws.append([p.codigo, p.descripcion, p.catalogo, p.tipo, p.producto, p.color, pm.nombre(p, aj), p.unidad,
+                       p.costo_total, p.stock, p.cond_mayorista, p.cond_minorista])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return _descarga(buf, f"productos_{date.today():%Y-%m-%d}", "xlsx")
+
+
 # ---------------- exportar y reportes ----------------
 CABS = ["Fecha", "Días", "Cliente", "Documento", "Folio", "Vendedor", "Despacho", "Seguimiento",
         "Monto", "Flete", "Total", "Pagado", "Debe", "Estado", "Comentario"]

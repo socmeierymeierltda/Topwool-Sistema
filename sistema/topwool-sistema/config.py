@@ -56,6 +56,8 @@ DEFAULTS = {
     # Pedidos sin pagar y recordatorios
     "correo_remitente": "contacto@topwool.cl",
     "estados_sin_pagar": "pending, on-hold",
+    # Nombres de producción: abreviaturas que se aplican al producto + color de la matriz
+    "abreviaturas": "corriedale dk=cdk, azul paquete de vela=azul vela, azul paquete vela=azul vela",
     # Envío a producción
     "correo_produccion": "socmeierymeierltda@gmail.com",
     # Cobranza

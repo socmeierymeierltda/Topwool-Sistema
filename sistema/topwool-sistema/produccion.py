@@ -1,5 +1,5 @@
 """Envío a producción: pedidos con 'curacautin' y sin color → Excel carta horizontal (sin lugar,
-comentario ni mail) → correo a la impresora de Curacautín → se pintan las filas en el Drive con el color de la tanda."""
+comentario ni mail) → correo a la impresora de Curacautín → se pinta la celda del cliente en el Drive con el color de la tanda."""
 import io
 import json
 import smtplib
@@ -149,7 +149,8 @@ def pintar(filas_num, color_hex):
     import sheets
     ws = sheets._hoja()
     r, g, b = (int(color_hex[i:i + 2], 16) / 255 for i in (1, 3, 5))
-    ws.batch_format([{"range": f"A{n}:L{n}", "format": {"backgroundColor": {"red": r, "green": g, "blue": b}}}
+    # solo la celda del cliente (columna C), como se marca a mano
+    ws.batch_format([{"range": f"C{n}", "format": {"backgroundColor": {"red": r, "green": g, "blue": b}}}
                      for n in filas_num])
 
 

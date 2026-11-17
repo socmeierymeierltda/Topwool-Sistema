@@ -84,3 +84,9 @@ tr.dif td{background:#fffaf0}
   .grilla{grid-template-columns:1fr 1fr}
   .c2,.c3,.c4,.c6,.c12{grid-column:span 2}
 }
+@media (min-width:821px) and (max-width:1440px){
+  .barra{gap:14px;padding:0 14px}
+  .nav{gap:0}
+  .nav a,.nav span{padding:7px 8px;font-size:13.5px}
+  .marca small{display:none}
+}

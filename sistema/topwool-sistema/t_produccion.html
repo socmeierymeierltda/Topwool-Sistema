@@ -1,7 +1,7 @@
 {% extends "t_base.html" %}
 {% block contenido %}
 <h1>Envío a producción</h1>
-<p class="sub">Pedidos del Drive que dicen <b>curacautin</b> y todavía no tienen color. Al enviarlos se arma el Excel y/o PDF (carta horizontal, sin lugar, comentario ni mail), se manda al correo de la impresora y las filas se pintan en el Drive con el color de esta tanda.</p>
+<p class="sub">Pedidos del Drive que dicen <b>curacautin</b> y todavía no tienen color. Al enviarlos se arma el Excel y/o PDF (carta horizontal, sin lugar, comentario ni mail), se manda al correo de la impresora y se pinta la celda del cliente en el Drive con el color de esta tanda.</p>
 {% if error_drive %}<div class="msg err">{{ error_drive }}</div>{% endif %}
 {% if descargar %}<div class="msg ok">Archivos del envío: <a href="/produccion/{{ descargar }}/excel">Excel</a> · <a href="/produccion/{{ descargar }}/pdf">PDF</a></div>{% endif %}
 {% if not smtp %}<div class="msg demo">El correo todavía no está configurado: por ahora el Excel se descarga y lo envías tú. Para que salga solo, agrega SMTP_USER y SMTP_PASSWORD en Render (ver README).</div>{% endif %}

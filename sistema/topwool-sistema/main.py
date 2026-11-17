@@ -15,6 +15,7 @@ import cobranza  # noqa: F401  (registra sus tablas)
 import seguimiento  # noqa: F401
 import produccion  # noqa: F401
 import informes  # noqa: F401
+import productos  # noqa: F401
 import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
 
@@ -363,6 +364,8 @@ async def subir_equivalencias(request: Request, archivo: UploadFile = File(...))
         with db.Session() as s:
             s.execute(delete(db.Equivalencia))
             s.add_all(nuevas)
+            s.flush()
+            productos.aplicar_a_equivalencias(s, db.ajustes())   # nombres oficiales de la matriz
             s.commit()
     except Exception as e:  # noqa: BLE001
         return volver(request, "/equivalencias", error=f"No pude leer el archivo: {e}")
@@ -454,6 +457,9 @@ async def comparar_inventario(request: Request, archivo: UploadFile = File(...))
     def tarea(avance):
         avance(f"Leí {len(saldos)} artículos de Defontana. Leyendo el stock de la web…")
         catalogo = woo.catalogo(avance)
+        with db.Session() as s:
+            productos.guardar_stock(s, saldos)
+            s.commit()
         ULTIMA_COMPARACION.update(filas=inventario.comparar(saldos, catalogo), fecha=datetime.now(), archivo=nombre)
         n_dif = sum(1 for f in ULTIMA_COMPARACION["filas"] if f["difiere"])
         return f"Comparación lista: {len(saldos)} artículos de Defontana, {n_dif} productos con diferencia."
