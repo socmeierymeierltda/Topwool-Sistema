@@ -41,6 +41,20 @@ class Documento(db.Base):
     creado = Column(DateTime, default=datetime.now)
 
 
+from sqlalchemy import event  # noqa: E402
+
+
+@event.listens_for(Documento, "before_insert")
+@event.listens_for(Documento, "before_update")
+def _recortar_textos(mapper, connection, doc):
+    """Si un texto viene más largo que su columna (por ejemplo desde una planilla), se recorta en vez de fallar."""
+    for col in mapper.columns:
+        largo = getattr(col.type, "length", None)
+        v = getattr(doc, col.key, None)
+        if largo and isinstance(v, str) and len(v) > largo:
+            setattr(doc, col.key, v[:largo])
+
+
 class Abono(db.Base):
     __tablename__ = "abonos"
     id = Column(Integer, primary_key=True)
@@ -49,6 +63,15 @@ class Abono(db.Base):
     monto = Column(Integer)
     medio = Column(String(60))
     nota = Column(String(250))
+
+
+@event.listens_for(Abono, "before_insert")
+def _recortar_abono(mapper, connection, a):
+    for col in mapper.columns:
+        largo = getattr(col.type, "length", None)
+        v = getattr(a, col.key, None)
+        if largo and isinstance(v, str) and len(v) > largo:
+            setattr(a, col.key, v[:largo])
 
 
 class Despacho(db.Base):
