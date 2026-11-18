@@ -18,9 +18,9 @@
   </form>
   {% if n_revisar or por_avisar or sin_doc %}
   <div class="estado" style="margin-top:12px">
-    {% if n_revisar %}<a class="chip otro" href="/cobranza?revisar=1">{{ n_revisar }} con cliente por revisar</a>{% endif %}
+    {% if n_revisar %}<a class="chip otro" href="/cobranza?revisar=1" style="text-decoration:none">{{ n_revisar }} con cliente por revisar</a>{% endif %}
     {% if por_avisar %}<a class="boton chico verde" href="/despachos">{{ por_avisar }} paquetes con etiqueta esperando envío</a>{% endif %}
-    {% if sin_doc %}<span class="chip transferencia">{{ sin_doc }} etiquetas sin documento todavía</span>{% endif %}
+    {% if sin_doc %}<a class="chip transferencia" href="/despachos/etiquetas">{{ sin_doc }} etiquetas sin documento todavía</a>{% endif %}
   </div>
   {% endif %}
 </div>

@@ -5,6 +5,7 @@
 <div class="filtros">
   <a class="boton {{ '' if ver=='pendientes' else 'sec' }}" href="/despachos">Con etiqueta, por enviar</a>
   <a class="boton {{ '' if ver=='enviados' else 'sec' }}" href="/despachos?ver=enviados">Ya enviados</a>
+  <a class="boton sec" href="/despachos/etiquetas">Etiquetas sin documento</a>
 </div>
 {% if lista %}
 <form method="post" action="/despachos/marcar"{% if ver=='pendientes' %} onsubmit="return confirm('¿Estos paquetes ya se entregaron al transporte?')"{% endif %}>

@@ -360,6 +360,50 @@ def despachos(request: Request, ver: str = "pendientes"):
     return _render(request, "despachos.html", lista=lista, ver=ver)
 
 
+@router.get("/despachos/etiquetas", response_class=HTMLResponse)
+def etiquetas_sin_documento(request: Request):
+    """Etiquetas FedEx/Blue que el sistema no pudo unir a una factura o boleta."""
+    import seguimiento as sg
+    with db.Session() as s:
+        etiquetas = list(s.scalars(select(cb.Despacho).where(cb.Despacho.documento_id.is_(None))
+                                   .order_by(cb.Despacho.fecha.desc().nullslast())))
+        docs = list(s.scalars(select(cb.Documento).where(cb.Documento.fecha >= date.fromordinal(date.today().toordinal() - 90))
+                              .order_by(cb.Documento.fecha.desc())))
+    lista = []
+    for e in etiquetas:
+        # documentos sugeridos: los de nombre más parecido al destinatario, sin seguimiento primero
+        cands = sorted(docs, key=lambda d: (-max(sg.parecido(e.destinatario or "", d.cliente or ""),
+                                                 sg.parecido(e.destinatario or "", d.razon_social or "")),
+                                            bool(d.tracking)))
+        lista.append({"e": e, "sugeridos": cands[:8]})
+    return _render(request, "etiquetas.html", lista=lista, docs=docs)
+
+
+@router.post("/despachos/etiquetas/{eid}/unir")
+async def unir_etiqueta(request: Request, eid: int):
+    form = await request.form()
+    did = form.get("documento_id")
+    if not did:
+        return _volver(request, "/despachos/etiquetas", error="Elige el documento.")
+    with db.Session() as s:
+        e = s.get(cb.Despacho, eid)
+        d = s.get(cb.Documento, int(did))
+        e.documento_id = d.id
+        d.tracking = e.tracking
+        d.empresa = e.empresa
+        s.commit()
+        msg = f"Etiqueta {e.empresa} {e.tracking} unida a {d.tipo} {d.folio} ({d.cliente})."
+    return _volver(request, "/despachos/etiquetas", aviso=msg)
+
+
+@router.post("/despachos/etiquetas/{eid}/borrar")
+def borrar_etiqueta(request: Request, eid: int):
+    with db.Session() as s:
+        s.delete(s.get(cb.Despacho, eid))
+        s.commit()
+    return _volver(request, "/despachos/etiquetas", aviso="Etiqueta eliminada.")
+
+
 @router.post("/despachos/marcar")
 async def marcar_despachados(request: Request):
     """Marca los paquetes elegidos como entregados al transporte y avisa a los clientes web."""

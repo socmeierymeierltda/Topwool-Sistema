@@ -1,0 +1,32 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<p><a href="/despachos">← Despachos</a> · <a href="/cobranza">Cobranza</a></p>
+<h1>Etiquetas sin documento</h1>
+<p class="sub">Etiquetas de FedEx o Blue que el sistema no pudo unir a una factura o boleta. Lo normal es que ese documento <b>todavía no se haya subido</b>: al subirlo se unen solas. Si el documento ya está, elígelo aquí y queda unido (el número de seguimiento pasa al documento).</p>
+{% if lista %}
+<div class="tabla-scroll"><table>
+<tr><th>Etiqueta</th><th>Destinatario</th><th>Unir a documento</th><th></th></tr>
+{% for x in lista %}{% set e = x.e %}
+<tr>
+<td><b>{{ e.empresa|title }}</b> {{ e.tracking }}<br><span class="sub" style="font-size:12px">{{ e.fecha.strftime('%d-%m-%Y') if e.fecha }}{% if e.folio_ref %} · folio en etiqueta: {{ e.folio_ref }}{% endif %}<br>{{ e.archivo }}</span></td>
+<td>{{ e.destinatario or '—' }}</td>
+<td>
+  <form method="post" action="/despachos/etiquetas/{{ e.id }}/unir" style="display:flex;gap:6px;flex-wrap:wrap">
+    <select name="documento_id" style="max-width:360px" required>
+      <option value="">Elige el documento…</option>
+      <optgroup label="Más parecidos">
+      {% for d in x.sugeridos %}<option value="{{ d.id }}">{{ d.cliente }} · {{ d.tipo }} {{ d.folio }} · {{ d.fecha.strftime('%d-%m') if d.fecha }}{% if d.tracking %} · ya tiene {{ d.tracking }}{% endif %}</option>{% endfor %}
+      </optgroup>
+      <optgroup label="Todos (últimos 90 días)">
+      {% for d in docs %}<option value="{{ d.id }}">{{ d.cliente }} · {{ d.tipo }} {{ d.folio }} · {{ d.fecha.strftime('%d-%m') if d.fecha }}</option>{% endfor %}
+      </optgroup>
+    </select>
+    <button class="chico">Unir</button>
+  </form>
+</td>
+<td><form method="post" action="/despachos/etiquetas/{{ e.id }}/borrar" onsubmit="return confirm('¿Eliminar esta etiqueta del sistema?')"><button class="sec chico" style="color:var(--rojo)">Borrar</button></form></td>
+</tr>
+{% endfor %}
+</table></div>
+{% else %}<div class="vacio">Todas las etiquetas están unidas a su documento. 🎉</div>{% endif %}
+{% endblock %}
