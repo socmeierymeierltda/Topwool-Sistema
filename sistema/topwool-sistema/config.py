@@ -60,6 +60,8 @@ DEFAULTS = {
     "abreviaturas": "corriedale dk=cdk, azul paquete de vela=azul vela, azul paquete vela=azul vela",
     # Envío a producción
     "correo_produccion": "socmeierymeierltda@gmail.com",
+    # Conciliación: RUT que aparece en la cartola = de dónde viene el depósito
+    "ruts_conocidos": "0768300143=flow, 0966893109=transbank",
     # Cobranza
     "vendedores": "javier=javier, maria de los angeles=maria, mariajesus=jesu, manuel=manuel, cris=cris",
     "palabras_pagado": "efect, efectivo, pagado",

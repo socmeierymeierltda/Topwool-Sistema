@@ -1,0 +1,87 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Conciliación bancaria</h1>
+<p class="sub">Sube la cartola del banco: el sistema guarda los abonos y propone qué venta de Cobranza paga cada transferencia (por nombre del que transfiere y monto). Al confirmar, el pago queda registrado en Cobranza y el sistema aprende quién es ese depositante.</p>
+
+<div class="tarjeta">
+  <form class="subir" method="post" action="/conciliacion/subir" enctype="multipart/form-data">
+    <b>Cargar cartola</b>
+    <select name="banco" style="width:auto">{% for b in bancos %}<option>{{ b }}</option>{% endfor %}</select>
+    <input type="file" name="archivo" accept=".xls,.xlsx" required>
+    <button>Subir</button>
+    {% if ult %}<span class="sub" style="margin:0">Último movimiento cargado: {{ ult.strftime('%d-%m-%Y') }}</span>{% endif %}
+  </form>
+  <p class="sub" style="margin:8px 0 0">Puedes subir cartolas que se traslapen: los movimientos repetidos no se duplican. Por ahora está probado con Banco de Chile; BancoEstado y Santander se ajustan cuando tengamos un ejemplo.</p>
+  {% if resumen %}
+  <div class="estado" style="margin-top:10px">
+    {% for t, x in resumen.items() %}<a class="chip {{ 'otro' if t=='transferencia' else '' }}" href="/conciliacion?tipo={{ t }}">{{ x[0] }} {{ t }} pendientes · {{ x[1]|clp }}</a>{% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="filtros">
+  {% for v, n in [('pendientes','Pendientes'),('conciliados','Conciliados'),('ignorados','No son ventas')] %}
+  <a class="boton {{ '' if ver==v else 'sec' }}" href="/conciliacion?ver={{ v }}&tipo={{ tipo }}">{{ n }}</a>{% endfor %}
+  <form method="get" style="display:flex;gap:6px;flex-wrap:wrap">
+    <input type="hidden" name="ver" value="{{ ver }}">
+    <select name="tipo" style="width:auto">
+      {% for t, n in [('transferencia','Transferencias'),('efectivo','Depósitos en efectivo'),('flow','Flow'),('transbank','Transbank'),('otro','Otros'),('','Todos')] %}<option value="{{ t }}" {{ 'selected' if tipo==t }}>{{ n }}</option>{% endfor %}
+    </select>
+    <select name="banco" style="width:auto"><option value="">Todos los bancos</option>{% for b in bancos %}<option {{ 'selected' if banco==b }}>{{ b }}</option>{% endfor %}</select>
+    <button class="sec">Ver</button>
+  </form>
+  {% if seguras %}
+  <form method="post" action="/conciliacion/automatico" onsubmit="return confirm('¿Conciliar {{ seguras }} pagos donde coinciden el cliente y el monto exacto?')">
+    <input type="hidden" name="ver" value="{{ ver }}"><input type="hidden" name="tipo" value="{{ tipo }}">
+    <button class="verde">Conciliar las {{ seguras }} seguras</button>
+  </form>
+  {% endif %}
+</div>
+{% if tipo in ('flow', 'transbank') and ver=='pendientes' %}<div class="msg demo">Los depósitos de {{ tipo|title }} juntan varias ventas: se conciliarán cuando conectemos {{ tipo|title }}. Por ahora puedes dejarlos aquí o marcarlos como "no es venta".</div>{% endif %}
+
+{% if filas %}
+<div class="tabla-scroll"><table>
+<tr><th>Fecha</th><th>Movimiento</th><th class="n">Monto</th><th>{{ 'Posibles ventas' if ver=='pendientes' else 'Detalle' }}</th></tr>
+{% for x in filas %}{% set m = x.m %}
+<tr>
+<td style="white-space:nowrap">{{ m.fecha.strftime('%d-%m-%Y') }}<br><span class="sub" style="font-size:12px">{{ m.banco }}</span></td>
+<td><b>{{ m.contraparte or m.descripcion }}</b>{% if m.contraparte %}<br><span class="sub" style="font-size:12px">{{ m.descripcion }}</span>{% endif %}<br><span class="chip" style="margin-top:3px">{{ m.tipo }}</span></td>
+<td class="n"><b>{{ m.monto|clp }}</b></td>
+<td style="min-width:360px">
+{% if ver=='pendientes' %}
+  <form method="post" action="/conciliacion/{{ m.id }}/confirmar">
+    <input type="hidden" name="ver" value="{{ ver }}"><input type="hidden" name="tipo" value="{{ tipo }}"><input type="hidden" name="banco" value="{{ banco }}">
+    {% for sg in x.sug %}
+    <label style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;font-size:14px">
+      <input type="checkbox" name="docs" value="{{ sg.docs|map(attribute=0)|map(attribute='id')|join(',') }}" style="width:auto;margin-top:3px" {{ 'checked' if loop.first and sg.puntaje >= 90 }}>
+      <span><b>{{ sg.docs[0][0].cliente }}</b> · {% for d, debe in sg.docs %}{{ d.tipo }} {{ d.folio }} ({{ debe|clp }}){{ ', ' if not loop.last }}{% endfor %}
+        <br><span class="sub" style="font-size:12px">{{ sg.motivo }} · coincidencia {{ sg.puntaje }}%{% if sg.total != m.monto %} · debe {{ sg.total|clp }}{% endif %}</span></span>
+    </label>
+    {% endfor %}
+    {% if not x.sug %}<p class="sub" style="margin:0 0 6px;font-size:13px">Sin coincidencias por nombre. Elige la venta a mano:</p>{% endif %}
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <select name="otro" style="max-width:300px;font-size:13px">
+        <option value="">{{ 'Otra venta…' if x.sug else 'Elige la venta…' }}</option>
+        {% for d, debe in opciones %}<option value="{{ d.id }}">{{ d.cliente }} · {{ d.tipo }} {{ d.folio }} · debe {{ debe|clp }}</option>{% endfor %}
+      </select>
+      <button class="verde chico">Confirmar</button>
+      <button class="sec chico" formaction="/conciliacion/{{ m.id }}/ignorar" formnovalidate title="Por ejemplo: traspaso entre cuentas propias, préstamo, devolución">No es venta</button>
+    </div>
+  </form>
+{% elif ver=='conciliados' %}
+  {% for d, monto in x.ligados %}{% if d %}<a href="/cobranza/doc/{{ d.id }}">{{ d.cliente }} · {{ d.tipo }} {{ d.folio }}</a> · {{ monto|clp }}<br>{% endif %}{% endfor %}
+  {% if m.nota %}<span class="sub" style="font-size:12px">{{ m.nota }}</span><br>{% endif %}
+  <form method="post" action="/conciliacion/{{ m.id }}/deshacer" style="margin-top:4px" onsubmit="return confirm('¿Deshacer? Se quitan los abonos que se registraron en Cobranza.')"><input type="hidden" name="ver" value="{{ ver }}"><input type="hidden" name="tipo" value="{{ tipo }}"><button class="sec chico">Deshacer</button></form>
+{% else %}
+  <span class="sub">{{ m.nota }}</span>
+  <form method="post" action="/conciliacion/{{ m.id }}/deshacer" style="margin-top:4px"><input type="hidden" name="ver" value="{{ ver }}"><input type="hidden" name="tipo" value="{{ tipo }}"><button class="sec chico">Volver a pendiente</button></form>
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</table></div>
+{% if filas|length >= 300 %}<p class="sub">Se muestran 300 movimientos. Filtra por banco o tipo para ver el resto.</p>{% endif %}
+{% else %}
+<div class="vacio">{{ 'No hay movimientos pendientes de este tipo.' if ver=='pendientes' else 'Nada por aquí.' }}</div>
+{% endif %}
+{% endblock %}

@@ -2,7 +2,7 @@
 import io
 from datetime import date, datetime
 
-from fastapi import APIRouter, File, Request, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy import func, select
 
@@ -800,6 +800,134 @@ def exportar_productos():
     wb.save(buf)
     buf.seek(0)
     return _descarga(buf, f"productos_{date.today():%Y-%m-%d}", "xlsx")
+
+
+# ---------------- conciliación bancaria ----------------
+def _seguras(s, movs, pend):
+    import conciliacion as cc
+    out = []
+    for m in movs:
+        sug = cc.sugerencias(s, m, pend, limite=2)
+        if sug and sug[0]["puntaje"] >= 96 and sug[0]["motivo"] != "abono a su deuda" and \
+                (len(sug) == 1 or sug[1]["puntaje"] < sug[0]["puntaje"] - 5):
+            out.append((m, sug[0]))
+    return out
+
+
+@router.get("/conciliacion", response_class=HTMLResponse)
+def ver_conciliacion(request: Request, ver: str = "pendientes", tipo: str = "transferencia", banco: str = ""):
+    import conciliacion as cc
+    with db.Session() as s:
+        st = select(cc.MovBanco).where(cc.MovBanco.estado == {"pendientes": "pendiente", "conciliados": "conciliado",
+                                                               "ignorados": "ignorado"}.get(ver, "pendiente"))
+        if tipo:
+            st = st.where(cc.MovBanco.tipo == tipo)
+        if banco:
+            st = st.where(cc.MovBanco.banco == banco)
+        movs = list(s.scalars(st.order_by(cc.MovBanco.fecha.desc(), cc.MovBanco.id).limit(300)))
+        pend = cc.deudas(s)
+        filas_ = []
+        for m in movs:
+            sug = cc.sugerencias(s, m, pend) if ver == "pendientes" else []
+            ligados = []
+            if ver == "conciliados":
+                for md in s.scalars(select(cc.MovDoc).where(cc.MovDoc.mov_id == m.id)):
+                    d = s.get(cb.Documento, md.documento_id)
+                    ligados.append((d, md.monto))
+            filas_.append({"m": m, "sug": sug, "ligados": ligados})
+        seguras = len(_seguras(s, movs, pend)) if ver == "pendientes" else 0
+        resumen = {}
+        for m in s.scalars(select(cc.MovBanco).where(cc.MovBanco.estado == "pendiente")):
+            x = resumen.setdefault(m.tipo, [0, 0])
+            x[0] += 1
+            x[1] += m.monto or 0
+        ult = s.scalar(select(func.max(cc.MovBanco.fecha)))
+    opciones = sorted(pend, key=lambda x: cb.norm(x[0].cliente or ""))
+    return _render(request, "conciliacion.html", filas=filas_, ver=ver, tipo=tipo, banco=banco, bancos=cc.BANCOS,
+                   resumen=resumen, opciones=opciones, seguras=seguras, ult=ult)
+
+
+@router.post("/conciliacion/subir")
+async def subir_cartola(request: Request, banco: str = Form(...), archivo: UploadFile = File(...)):
+    import conciliacion as cc
+    try:
+        datos = cc.leer_cartola(await archivo.read(), archivo.filename or "", banco)
+        with db.Session() as s:
+            res = cc.guardar(s, datos, db.ajustes())
+            s.commit()
+    except Exception as e:  # noqa: BLE001
+        return _volver(request, "/conciliacion", error=f"No pude leer la cartola: {str(e)[:220]}")
+    msg = f"{banco}: {res['nuevos']} abonos nuevos"
+    if res["repetidos"]:
+        msg += f" ({res['repetidos']} ya estaban cargados)"
+    return _volver(request, "/conciliacion", aviso=msg + ".")
+
+
+def _volver_conc(form):
+    return "/conciliacion?" + "&".join(f"{k}={form.get(k)}" for k in ("ver", "tipo", "banco") if form.get(k) is not None)
+
+
+@router.post("/conciliacion/{mid}/confirmar")
+async def confirmar_mov(request: Request, mid: int):
+    import conciliacion as cc
+    form = await request.form()
+    ids = [int(x) for v in form.getlist("docs") for x in str(v).split(",") if x.strip()]
+    if form.get("otro"):
+        ids.append(int(form.get("otro")))
+    if not ids:
+        return _volver(request, _volver_conc(form), error="Elige a qué venta corresponde el pago.")
+    try:
+        with db.Session() as s:
+            m = s.get(cc.MovBanco, mid)
+            usados, resto = cc.confirmar(s, m, ids)
+            s.commit()
+            msg = f"${m.monto:,.0f} conciliado con {', '.join(f'{d.tipo} {d.folio}' for d in usados)} ({usados[0].cliente})".replace(",", ".")
+            if resto > 0:
+                msg += f". Sobran ${resto:,.0f}".replace(",", ".")
+    except Exception as e:  # noqa: BLE001
+        return _volver(request, _volver_conc(form), error=str(e)[:200])
+    return _volver(request, _volver_conc(form), aviso=msg + ".")
+
+
+@router.post("/conciliacion/automatico")
+async def conciliar_seguras(request: Request):
+    import conciliacion as cc
+    form = await request.form()
+    n = 0
+    with db.Session() as s:
+        movs = list(s.scalars(select(cc.MovBanco).where(cc.MovBanco.estado == "pendiente",
+                                                         cc.MovBanco.tipo == "transferencia")))
+        for m, sug in _seguras(s, movs, cc.deudas(s)):
+            try:
+                cc.confirmar(s, m, [d.id for d, _ in sug["docs"]])
+                s.flush()
+                n += 1
+            except ValueError:
+                pass
+        s.commit()
+    return _volver(request, _volver_conc(form), aviso=f"Se conciliaron {n} pagos con coincidencia segura (mismo cliente y mismo monto).")
+
+
+@router.post("/conciliacion/{mid}/ignorar")
+async def ignorar_mov(request: Request, mid: int):
+    import conciliacion as cc
+    form = await request.form()
+    with db.Session() as s:
+        m = s.get(cc.MovBanco, mid)
+        m.estado = "ignorado"
+        m.nota = form.get("motivo") or "No es pago de una venta"
+        s.commit()
+    return _volver(request, _volver_conc(form), aviso="Movimiento marcado como 'no es venta'.")
+
+
+@router.post("/conciliacion/{mid}/deshacer")
+async def deshacer_mov(request: Request, mid: int):
+    import conciliacion as cc
+    form = await request.form()
+    with db.Session() as s:
+        cc.deshacer(s, s.get(cc.MovBanco, mid))
+        s.commit()
+    return _volver(request, _volver_conc(form), aviso="Vuelve a pendiente; se quitaron los abonos que había creado.")
 
 
 # ---------------- exportar y reportes ----------------
