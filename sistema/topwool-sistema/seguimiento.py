@@ -24,6 +24,7 @@ class FilaDrive(db.Base):
     color_desde = Column(DateTime)
     documento_id = Column(Integer)
     ultima_vez = Column(DateTime)
+    despachado = Column(DateTime)       # marcado a mano desde Seguimiento
 
 
 def es_curacautin(lugar: str) -> bool:
@@ -137,7 +138,9 @@ def actualizar(s, filas):
                 r.documento_id = doc.id
         if doc:
             usados.add(doc.id)
-        if not es_curacautin(f["lugar"]):
+        if r.despachado or (doc and doc.despachado):
+            etapa = "despachado"
+        elif not es_curacautin(f["lugar"]):
             etapa = "no listo"
         elif doc and doc.despachado:
             etapa = "despachado"
@@ -151,7 +154,7 @@ def actualizar(s, filas):
             etapa = "listo para producción"
         desde = r.color_desde if etapa == "en producción" else r.visto_desde
         out.append({**f, "etapa": etapa, "doc": doc, "dias": (ahora - desde).days if desde else None,
-                    "desde": desde})
+                    "desde": desde, "clave": k, "despachado": r.despachado or (doc.despachado if doc else None)})
     return out
 
 

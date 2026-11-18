@@ -443,6 +443,59 @@ def seguimiento(request: Request, etapa: str = "", q: str = ""):
                    error_drive=error)
 
 
+@router.post("/seguimiento/despachar")
+async def seguimiento_despachar(request: Request):
+    """Marca como despachados los pedidos elegidos en Seguimiento (y su documento, si lo tienen)."""
+    import seguimiento as sg
+    form = await request.form()
+    claves = form.getlist("claves")
+    volver_a = "/seguimiento?" + "&".join(f"{k}={form.get(k)}" for k in ("etapa", "q") if form.get(k))
+    if not claves:
+        return _volver(request, volver_a, error="No elegiste pedidos.")
+    aj = db.ajustes()
+    avisar_web = bool(form.get("avisar"))
+    ahora = datetime.now()
+    avisados, fallas = 0, []
+    with db.Session() as s:
+        for k in claves:
+            r = s.get(sg.FilaDrive, k)
+            if not r:
+                continue
+            r.despachado = r.despachado or ahora
+            d = s.get(cb.Documento, r.documento_id) if r.documento_id else None
+            if d:
+                d.despachado = d.despachado or ahora
+                if avisar_web and (d.cliente or "").startswith("web") and d.tracking and not d.notificado:
+                    try:
+                        ok, motivo = _avisar(s, d, aj)
+                    except Exception as e:  # noqa: BLE001
+                        ok, motivo = False, str(e)[:120]
+                    if ok:
+                        avisados += 1
+                    else:
+                        fallas.append(f"{d.cliente} ({motivo})")
+        s.commit()
+    msg = f"{len(claves)} pedido(s) marcados como despachados"
+    msg += f"; se avisó a {avisados} cliente(s) web." if avisados else "."
+    return _volver(request, volver_a, aviso=msg, error=("No se pudo avisar a: " + "; ".join(fallas)) if fallas else None)
+
+
+@router.post("/seguimiento/{clave}/deshacer")
+async def seguimiento_deshacer(request: Request, clave: str):
+    import seguimiento as sg
+    form = await request.form()
+    with db.Session() as s:
+        r = s.get(sg.FilaDrive, clave)
+        if r:
+            r.despachado = None
+            d = s.get(cb.Documento, r.documento_id) if r.documento_id else None
+            if d:
+                d.despachado = None
+        s.commit()
+    volver_a = "/seguimiento?" + "&".join(f"{k}={form.get(k)}" for k in ("etapa", "q") if form.get(k))
+    return _volver(request, volver_a, aviso="El pedido vuelve a su etapa anterior.")
+
+
 # ---------------- envío a producción ----------------
 @router.get("/produccion", response_class=HTMLResponse)
 def produccion(request: Request):

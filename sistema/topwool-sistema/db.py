@@ -58,7 +58,8 @@ def init():
     pg = not config.DATABASE_URL.startswith("sqlite")
     nuevas = [("pedidos_web", "contactado", "TIMESTAMP"),
               ("documentos", "despachado", "TIMESTAMP"),
-              ("envios_produccion", "pdf", "BYTEA" if pg else "BLOB")]
+              ("envios_produccion", "pdf", "BYTEA" if pg else "BLOB"),
+              ("seguimiento_filas", "despachado", "TIMESTAMP")]
     for tabla, col, tipo in nuevas:
         sql = f"ALTER TABLE {tabla} ADD COLUMN {'IF NOT EXISTS ' if pg else ''}{col} {tipo}"
         try:
