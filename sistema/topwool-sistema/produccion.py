@@ -105,22 +105,29 @@ def pdf(filas, titulo) -> bytes:
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     from xml.sax.saxutils import escape
     cols = [c for c in COLS if c[0] in ("cliente", "pedido") or any((f.get(c[0]) or "").strip() for f in filas)]
-    celda = ParagraphStyle("c", fontName="Helvetica", fontSize=8, leading=10)
-    cab = ParagraphStyle("h", fontName="Helvetica-Bold", fontSize=8, leading=10, textColor=colors.white)
+    celda = ParagraphStyle("c", fontName="Helvetica", fontSize=11, leading=13.5)
+    cab = ParagraphStyle("h", fontName="Helvetica-Bold", fontSize=11, leading=13.5, textColor=colors.white)
     ancho_total = landscape(letter)[0] - 1.6 * cm
-    suma = sum(c[2] for c in cols)
-    anchos = [ancho_total * c[2] / suma for c in cols]
-    data = [[Paragraph(c[1], cab) for c in cols]]
+    # anchos pensados para letra de 11 puntos (en cm); el sobrante se reparte en "Pedido"
+    base = {"cliente": 3.6, "pedido": 7.0, "telefono": 2.7, "direccion": 4.2, "comuna": 2.4,
+            "vendedor": 1.9, "doc": 3.0, "empresa": 2.4}
+    titulos = {"vendedor": "Enc.", "doc": "Doc.", "telefono": "Teléfono"}
+    anchos = [base.get(c[0], 2.0) * cm for c in cols]
+    i_ped = [c[0] for c in cols].index("pedido")
+    anchos[i_ped] += ancho_total - sum(anchos)
+    data = [[Paragraph(titulos.get(c[0], c[1]), cab) for c in cols]]
     for f in filas:
         data.append([Paragraph(escape(str(f.get(c[0], "") or "")), celda) for c in cols])
     t = Table(data, colWidths=anchos, repeatRows=1)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5B4636")),
-                           ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#999999")),
-                           ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+                           ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
+                           ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                           ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                           ("LEFTPADDING", (0, 0), (-1, -1), 4), ("RIGHTPADDING", (0, 0), (-1, -1), 4)]))
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(letter), leftMargin=0.8 * cm, rightMargin=0.8 * cm,
                             topMargin=0.9 * cm, bottomMargin=0.9 * cm, title=titulo)
-    doc.build([Paragraph(f"<b>{escape(titulo)}</b>", ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=12)),
+    doc.build([Paragraph(f"<b>{escape(titulo)}</b>", ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=14, leading=17)),
                Spacer(1, 8), t])
     return buf.getvalue()
 
