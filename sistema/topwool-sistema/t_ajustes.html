@@ -31,6 +31,7 @@
     <div class="campo c12" style="margin-top:10px"><b>Producción</b></div>
     <div class="campo c12"><label>Abreviaturas para los nombres de producción (producto o color = cómo se escribe)</label><input name="abreviaturas" value="{{ aj.abreviaturas }}"></div>
     <div class="campo c6"><label>Correo de la impresora de Curacautín</label><input name="correo_produccion" value="{{ aj.correo_produccion }}"></div>
+    <div class="campo c3"><label>Tamaño de letra del PDF de producción</label><select name="letra_pdf_produccion">{% for t in ['10','11','12','13','14','16'] %}<option {{ 'selected' if aj.letra_pdf_produccion==t }}>{{ t }}</option>{% endfor %}</select></div>
     <div class="campo c12" style="margin-top:10px"><b>Cobranza y despachos</b></div>
     <div class="campo c12"><label>Vendedores (nombre en el documento = nombre corto)</label><input name="vendedores" value="{{ aj.vendedores }}"></div>
     <div class="campo c6"><label>Drive de ventas (dirección de la planilla Ventas)</label><input name="drive_ventas" value="{{ aj.drive_ventas }}"></div>

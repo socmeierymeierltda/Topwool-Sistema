@@ -606,7 +606,7 @@ async def enviar_produccion(request: Request):
     ahora = datetime.now()
     titulo = f"Envío a producción N° {numero} — {ahora:%d-%m-%Y %H:%M} — {len(filas_)} pedidos"
     contenido = pr.excel(filas_, titulo)
-    contenido_pdf = pr.pdf(filas_, titulo)
+    contenido_pdf = pr.pdf(filas_, titulo, db.ajustes().get("letra_pdf_produccion", 14))
     base = f"produccion_{ahora:%Y-%m-%d}_envio{numero}"
     formato = form.get("formato") or "ambos"
     adjuntos = ([(base + ".xlsx", contenido)] if formato in ("excel", "ambos") else []) + \
@@ -656,7 +656,7 @@ def vista_previa_pdf():
     import produccion as pr
     import seguimiento as sg
     filas_ = pr.listos(sg.leer_drive())
-    contenido = pr.pdf(filas_, f"VISTA PREVIA — {datetime.now():%d-%m-%Y %H:%M} — {len(filas_)} pedidos")
+    contenido = pr.pdf(filas_, tamano=db.ajustes().get("letra_pdf_produccion", 14), titulo=f"VISTA PREVIA — {datetime.now():%d-%m-%Y %H:%M} — {len(filas_)} pedidos")
     return _descarga(io.BytesIO(contenido), f"vista_previa_produccion_{date.today():%Y-%m-%d}", "pdf")
 
 
@@ -673,7 +673,7 @@ def archivo_envio(eid: int, formato: str):
                 ws = openpyxl.load_workbook(io.BytesIO(e.excel)).active
                 filas_ = [dict(zip([k for k, _, _ in pr.COLS], [str(c.value or "") for c in r_]))
                           for r_ in ws.iter_rows(min_row=3)]
-                datos = pr.pdf(filas_, str(ws["A1"].value or nombre))
+                datos = pr.pdf(filas_, str(ws["A1"].value or nombre), db.ajustes().get("letra_pdf_produccion", 14))
             return _descarga(io.BytesIO(datos), nombre, "pdf")
         return _descarga(io.BytesIO(e.excel), nombre, "xlsx")
 

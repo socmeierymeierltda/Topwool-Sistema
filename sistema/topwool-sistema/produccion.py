@@ -96,7 +96,7 @@ def excel(filas, titulo) -> bytes:
     return buf.getvalue()
 
 
-def pdf(filas, titulo) -> bytes:
+def pdf(filas, titulo, tamano=14) -> bytes:
     """Mismo contenido que el Excel, en PDF carta horizontal (para cuando no está la impresora)."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import landscape, letter
@@ -105,19 +105,29 @@ def pdf(filas, titulo) -> bytes:
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     from xml.sax.saxutils import escape
     cols = [c for c in COLS if c[0] in ("cliente", "pedido") or any((f.get(c[0]) or "").strip() for f in filas)]
-    celda = ParagraphStyle("c", fontName="Helvetica", fontSize=11, leading=13.5)
-    cab = ParagraphStyle("h", fontName="Helvetica-Bold", fontSize=11, leading=13.5, textColor=colors.white)
+    tamano = max(8, min(18, float(tamano or 14)))
+    chico = max(8, tamano - 2)                 # columnas secundarias, un poco más chicas
+    principales = ("cliente", "pedido")
+    est = {True: ParagraphStyle("c", fontName="Helvetica", fontSize=tamano, leading=tamano * 1.22),
+           False: ParagraphStyle("c2", fontName="Helvetica", fontSize=chico, leading=chico * 1.22)}
+    cab = ParagraphStyle("h", fontName="Helvetica-Bold", fontSize=chico, leading=chico * 1.22, textColor=colors.white)
     ancho_total = landscape(letter)[0] - 1.6 * cm
-    # anchos pensados para letra de 11 puntos (en cm); el sobrante se reparte en "Pedido"
-    base = {"cliente": 3.6, "pedido": 7.0, "telefono": 2.7, "direccion": 4.2, "comuna": 2.4,
-            "vendedor": 1.9, "doc": 3.0, "empresa": 2.4}
+    # ancho necesario por columna, en "caracteres", según la letra de cada una
+    caracteres = {"cliente": 15, "telefono": 12, "direccion": 18, "comuna": 11, "vendedor": 7, "doc": 11, "empresa": 9}
     titulos = {"vendedor": "Enc.", "doc": "Doc.", "telefono": "Teléfono"}
-    anchos = [base.get(c[0], 2.0) * cm for c in cols]
+
+    def ancho(c):
+        t = tamano if c in principales else chico
+        return caracteres.get(c, 8) * t * 0.55 + 10        # puntos: ~0,55 em por letra + relleno
+    anchos = [0 if c[0] == "pedido" else ancho(c[0]) for c in cols]
     i_ped = [c[0] for c in cols].index("pedido")
-    anchos[i_ped] += ancho_total - sum(anchos)
+    anchos[i_ped] = max(ancho_total * 0.24, ancho_total - sum(anchos))
+    if sum(anchos) > ancho_total:              # que nunca se salga de la hoja
+        f = ancho_total / sum(anchos)
+        anchos = [a * f for a in anchos]
     data = [[Paragraph(titulos.get(c[0], c[1]), cab) for c in cols]]
     for f in filas:
-        data.append([Paragraph(escape(str(f.get(c[0], "") or "")), celda) for c in cols])
+        data.append([Paragraph(escape(str(f.get(c[0], "") or "")), est[c[0] in principales]) for c in cols])
     t = Table(data, colWidths=anchos, repeatRows=1)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5B4636")),
                            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
@@ -127,7 +137,7 @@ def pdf(filas, titulo) -> bytes:
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(letter), leftMargin=0.8 * cm, rightMargin=0.8 * cm,
                             topMargin=0.9 * cm, bottomMargin=0.9 * cm, title=titulo)
-    doc.build([Paragraph(f"<b>{escape(titulo)}</b>", ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=14, leading=17)),
+    doc.build([Paragraph(f"<b>{escape(titulo)}</b>", ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=tamano + 3, leading=(tamano + 3) * 1.2)),
                Spacer(1, 8), t])
     return buf.getvalue()
 
