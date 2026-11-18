@@ -283,7 +283,12 @@ def registrar_documento(s, d: dict, aj) -> tuple:
     s.flush()
     # pagado al emitir: pago electrónico (Flow), ventas web, o palabras clave del comentario
     com = norm(d["comentario"])
-    if d["tipo"] == "cv" or cliente.startswith("web") or \
+    medio_meson = meson(d["comentario"]) or meson(d.get("archivo") or "")
+    if medio_meson:
+        doc.empresa = "mesón curacautín"
+        s.add(Abono(documento_id=doc.id, fecha=d["fecha"] or date.today(), monto=d["total"], medio=medio_meson,
+                    nota="Venta en el mesón de Curacautín"))
+    elif d["tipo"] == "cv" or cliente.startswith("web") or \
             any(re.search(r"\b" + re.escape(norm(p)) + r"\b", com) for p in db.lista(aj["palabras_pagado"])):
         s.add(Abono(documento_id=doc.id, fecha=d["fecha"] or date.today(), monto=d["total"],
                     medio="Flow / web" if (d["tipo"] == "cv" or cliente.startswith("web")) else "Al emitir",
@@ -333,23 +338,44 @@ def vincular_pendientes(s):
 
 
 # ---------------- importación de la planilla Ventas antigua ----------------
-def importar_planilla(s, contenido: bytes) -> int:
-    import openpyxl
-    wb = openpyxl.load_workbook(io.BytesIO(contenido), data_only=True, read_only=True)
-    ws = wb["Ventas"] if "Ventas" in wb.sheetnames else wb.worksheets[0]
-    filas = list(ws.iter_rows(values_only=True))
+def meson(texto: str):
+    """'vta cura 9-11 efect' / 'venta cura 17-11' → medio de pago de la venta en el mesón de Curacautín."""
+    t = norm(texto)
+    if not re.search(r"\b(vta|venta|vtas|ventas)\.?\s+cura", t):
+        return None
+    return "Efectivo (mesón Curacautín)" if "efect" in t else "Transbank (mesón Curacautín)"
+
+
+def _fecha_celda(v):
+    if isinstance(v, datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    if isinstance(v, (int, float)) and 30000 < v < 80000:          # número de serie de Sheets/Excel
+        from datetime import timedelta
+        return date(1899, 12, 30) + timedelta(days=int(v))
+    return _fecha(str(v)) if v not in (None, "") else None
+
+
+def _num_celda(v):
+    if isinstance(v, (int, float)):
+        return int(round(float(v)))
+    t = re.sub(r"[^\d,-]", "", str(v or "")).replace(",", ".")
+    try:
+        return int(round(float(t))) if t not in ("", "-") else 0
+    except ValueError:
+        return 0
+
+
+def importar_filas(s, filas, enc=None, medio_pago="Planilla anterior") -> int:
+    """filas: la hoja Ventas como lista de filas (desde Excel o desde Google Sheets)."""
+    enc = enc or {}
     cab_i = next(i for i, r in enumerate(filas) if r and any(str(c or "").strip().upper() == "CLIENTE" for c in r))
     cab = [str(c or "").strip().upper() for c in filas[cab_i]]
 
     def col(r, nombre):
         return r[cab.index(nombre)] if nombre in cab and cab.index(nombre) < len(r) else None
 
-    # vendedor por cliente desde la hoja "clientes" (para filas sin vendedor)
-    enc = {}
-    if "clientes" in wb.sheetnames:
-        for r in wb["clientes"].iter_rows(min_row=2, values_only=True):
-            if r and r[0] and len(r) > 1 and r[1]:
-                enc[norm(str(r[0]))] = str(r[1]).strip().lower()
     previos = {(d.folio, d.cliente, d.total) for d in s.scalars(select(Documento).where(Documento.origen == "planilla"))}
     # documentos que ya se subieron en PDF: misma venta si coincide el folio y el total
     por_pdf = {(d.folio, d.total) for d in s.scalars(select(Documento).where(Documento.origen == "pdf"))}
@@ -358,33 +384,69 @@ def importar_planilla(s, contenido: bytes) -> int:
         cliente = col(r, "CLIENTE")
         if not cliente or not str(cliente).strip():
             continue
-        fecha = col(r, "FECHA")
-        fecha = fecha.date() if isinstance(fecha, datetime) else fecha if isinstance(fecha, date) else None
+        fecha = _fecha_celda(col(r, "FECHA"))
         folio = col(r, "FOLIO")
         try:
-            folio = int(float(folio)) if folio not in (None, "") else None
+            folio = int(float(str(folio).replace(".", ""))) if folio not in (None, "") else None
         except (TypeError, ValueError):
             folio = None
-        num = lambda v: int(round(float(v))) if isinstance(v, (int, float)) else 0  # noqa: E731
-        monto, flete = num(col(r, "MONTO")), num(col(r, "FLETE"))
-        total = num(col(r, "TOTAL")) or monto + flete
+        monto, flete = _num_celda(col(r, "MONTO")), _num_celda(col(r, "FLETE"))
+        total = _num_celda(col(r, "TOTAL")) or monto + flete
+        if total <= 0:
+            continue
         if (folio, norm(str(cliente)), total) in previos:   # ya importado antes
             continue
         if folio and (folio, total) in por_pdf:              # ya está desde su PDF
             continue
         doc_txt = str(col(r, "DOCUMENTO") or "").strip().lower()
+        medio_meson = meson(str(cliente)) or meson(str(col(r, "COMENTARIO") or ""))
         doc = Documento(tipo="importado" if doc_txt in ("", "#n/a") else doc_txt[:20], folio=folio, fecha=fecha,
                         cliente=norm(str(cliente)),
                         vendedor=(str(col(r, "VENDEDOR") or "").strip().lower().replace("#n/a", "")
                                   or enc.get(norm(str(cliente)), "")),
-                        empresa=str(col(r, "EMPRESA") or "").strip().lower().replace("#n/a", ""),
+                        empresa="mesón curacautín" if medio_meson else
+                        str(col(r, "EMPRESA") or "").strip().lower().replace("#n/a", ""),
                         comentario=str(col(r, "COMENTARIO") or "").strip(), monto=monto, flete=flete, total=total,
                         origen="planilla")
         s.add(doc)
         s.flush()
-        pago = num(col(r, "MONTO PAGO"))
-        if pago:
-            s.add(Abono(documento_id=doc.id, fecha=fecha or date.today(), monto=pago, medio="Planilla anterior",
-                        nota="Importado desde la planilla Ventas"))
+        previos.add((folio, doc.cliente, total))
+        if medio_meson:   # venta de mesón: se paga en el momento
+            s.add(Abono(documento_id=doc.id, fecha=fecha or date.today(), monto=total, medio=medio_meson,
+                        nota="Venta en el mesón de Curacautín"))
+        else:
+            pago = _num_celda(col(r, "MONTO PAGO"))
+            if pago:
+                s.add(Abono(documento_id=doc.id, fecha=fecha or date.today(), monto=pago, medio=medio_pago,
+                            nota="Desde la planilla Ventas"))
         n += 1
     return n
+
+
+def importar_planilla(s, contenido: bytes) -> int:
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(contenido), data_only=True, read_only=True)
+    ws = wb["Ventas"] if "Ventas" in wb.sheetnames else wb.worksheets[0]
+    filas = [list(r) for r in ws.iter_rows(values_only=True)]
+    enc = {}
+    if "clientes" in wb.sheetnames:
+        for r in wb["clientes"].iter_rows(min_row=2, values_only=True):
+            if r and r[0] and len(r) > 1 and r[1]:
+                enc[norm(str(r[0]))] = str(r[1]).strip().lower()
+    return importar_filas(s, filas, enc)
+
+
+def sincronizar_drive_ventas(s, direccion: str) -> int:
+    """Lee la planilla Ventas desde Google Drive (compartida con el robot) y trae las ventas nuevas."""
+    import sheets
+    ss = sheets._cliente().open_by_key(sheets.id_planilla(direccion))
+    ws = ss.worksheet("Ventas") if "Ventas" in [w.title for w in ss.worksheets()] else ss.sheet1
+    filas = ws.get_values(value_render_option="UNFORMATTED_VALUE", date_time_render_option="SERIAL_NUMBER")
+    enc = {}
+    try:
+        for r in ss.worksheet("clientes").get_values()[1:]:
+            if len(r) > 1 and r[0] and r[1]:
+                enc[norm(r[0])] = r[1].strip().lower()
+    except Exception:  # noqa: BLE001  la hoja clientes es opcional
+        pass
+    return importar_filas(s, filas, enc, medio_pago="Planilla Ventas")

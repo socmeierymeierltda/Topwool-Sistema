@@ -16,6 +16,11 @@
     <button>Subir</button>
     <span class="sub" style="margin:0">Selecciona todos los PDF del día juntos (Ctrl+A) o un .zip: facturas, boletas, pagos electrónicos y etiquetas FedEx / Blue.</span>
   </form>
+  <form method="post" action="/cobranza/drive-ventas" class="subir" style="margin-top:10px">
+    <b>Drive de ventas</b>
+    <button class="sec chico">Traer ventas nuevas del Drive</button>
+    <span class="sub" style="margin:0">{{ 'Última vez: ' ~ ultima_sync if ultima_sync else 'Trae las ventas que anotas a diario en la planilla Ventas. Las de "vta cura…" quedan pagadas (Transbank, o efectivo si dice "efect").' }}</span>
+  </form>
   {% if n_revisar or por_avisar or sin_doc %}
   <div class="estado" style="margin-top:12px">
     {% if n_revisar %}<a class="chip otro" href="/cobranza?revisar=1" style="text-decoration:none">{{ n_revisar }} con cliente por revisar</a>{% endif %}

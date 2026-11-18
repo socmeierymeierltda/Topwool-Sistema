@@ -77,6 +77,7 @@ def ver(request: Request, estado: str = "", vendedor: str = "", q: str = "", des
     return _render(request, "cobranza.html", lista=lista[:500], n=len(lista), tot=tot, vendedores=vendedores,
                    por_vendedor=sorted(por_vendedor.items(), key=lambda x: -x[1]), f=filtros, sin_doc=sin_doc,
                    n_revisar=n_revisar, por_avisar=por_avisar, meses_opc=meses_opc, mes=mes,
+                   ultima_sync=db.ajustes().get("ultima_sync_ventas", ""),
                    qs="&".join(f"{k}={v}" for k, v in filtros.items() if v))
 
 
@@ -209,6 +210,24 @@ async def subir(request: Request, archivos: list[UploadFile] = File(...)):
     if malos:
         return _volver(request, "/cobranza", aviso=msg + ".", error="No pude leer: " + ", ".join(malos))
     return _volver(request, "/cobranza", aviso=msg + ".")
+
+
+@router.post("/cobranza/drive-ventas")
+def sincronizar_ventas(request: Request):
+    aj = db.ajustes()
+    if config.DEMO or not aj.get("drive_ventas"):
+        return _volver(request, "/cobranza", error="Falta la dirección del Drive de ventas en Ajustes (y conectar Google).")
+    try:
+        with db.Session() as s:
+            n = cb.sincronizar_drive_ventas(s, aj["drive_ventas"])
+            s.commit()
+        db.guardar_ajustes({"ultima_sync_ventas": datetime.now().strftime("%d-%m-%Y %H:%M")})
+    except Exception as e:  # noqa: BLE001
+        import sheets
+        return _volver(request, "/cobranza", error="No pude leer el Drive de ventas. " +
+                       sheets.error_claro(e).replace("PEDIDOS_SHEET_ID en Render", "la dirección en Ajustes"))
+    return _volver(request, "/cobranza", aviso=f"Drive de ventas: {n} ventas nuevas traídas a Cobranza." if n
+                   else "Drive de ventas: no hay ventas nuevas.")
 
 
 @router.post("/cobranza/importar")

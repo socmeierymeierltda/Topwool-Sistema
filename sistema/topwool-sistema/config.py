@@ -60,6 +60,9 @@ DEFAULTS = {
     "abreviaturas": "corriedale dk=cdk, azul paquete de vela=azul vela, azul paquete vela=azul vela",
     # Envío a producción
     "correo_produccion": "socmeierymeierltda@gmail.com",
+    # Planilla Ventas en Drive (se comparte con el robot como Lector)
+    "ultima_sync_ventas": "",
+    "drive_ventas": "https://docs.google.com/spreadsheets/d/146abptOvMsCmKmXVKy4YN2GzXfW5nv2SQhLH21rZdP0/edit",
     # Conciliación: RUT que aparece en la cartola = de dónde viene el depósito
     "ruts_conocidos": "0768300143=flow, 0966893109=transbank",
     # Cobranza
