@@ -176,8 +176,10 @@ def actualizar_stock(cambios):
     return n
 
 
-def crear_cupon(codigo, monto, vence, correos, descripcion="", tipo="percent", minimo=0, usos=1, envio_gratis=False):
-    """Cupón de WooCommerce. tipo: percent (%) | fixed_cart ($ al carro). correos vacío = cualquiera."""
+def crear_cupon(codigo, monto, vence, correos, descripcion="", tipo="percent", minimo=0, usos=1, envio_gratis=False,
+                productos=None, categorias=None, excluir=False):
+    """Cupón de WooCommerce. tipo: percent (%) | fixed_cart ($ al carro) | fixed_product ($ por producto).
+    correos vacío = cualquiera. productos/categorias: ids donde aplica (o donde NO aplica si excluir=True)."""
     if config.DEMO:
         return {"id": 0, "code": codigo, "demo": True}
     datos = {"code": codigo, "discount_type": tipo, "amount": str(monto), "individual_use": True,
@@ -188,11 +190,53 @@ def crear_cupon(codigo, monto, vence, correos, descripcion="", tipo="percent", m
         datos["usage_limit_per_user"] = int(usos)
     if minimo:
         datos["minimum_amount"] = str(minimo)
+    datos.update(restriccion_productos(productos, categorias, excluir))
     with _client() as c:
         r = c.post("coupons", json=datos)
         if r.status_code >= 400:
             raise RuntimeError((r.json() or {}).get("message", r.text)[:200])
         return r.json()
+
+
+def restriccion_productos(productos, categorias, excluir):
+    p, c = [int(x) for x in productos or []], [int(x) for x in categorias or []]
+    if excluir:
+        return {"product_ids": [], "product_categories": [], "excluded_product_ids": p, "excluded_product_categories": c}
+    return {"product_ids": p, "product_categories": c, "excluded_product_ids": [], "excluded_product_categories": []}
+
+
+_LISTA_PRODUCTOS = {"t": 0, "datos": None}
+
+
+def productos_y_categorias():
+    """[(id, nombre)] de productos publicados y de categorías, para elegir dónde aplica un cupón (se guarda 1 hora)."""
+    import time
+    if _LISTA_PRODUCTOS["datos"] and time.time() - _LISTA_PRODUCTOS["t"] < 3600:
+        return _LISTA_PRODUCTOS["datos"]
+    if config.DEMO:
+        datos = ([(101, "Malal Teñido"), (102, "Corriedale DK Teñido"), (103, "Merino Socks"), (104, "Algodón DK"),
+                  (105, "Mecha Colores Naturales"), (106, "Relmu")],
+                 [(11, "Lanas"), (12, "Algodón"), (13, "Vellón y mechas"), (14, "Kits")])
+    else:
+        prods, cats = [], []
+        with _client() as c:
+            for page in range(1, 11):
+                r = c.get("products", params={"per_page": 100, "page": page, "status": "publish", "_fields": "id,name"})
+                r.raise_for_status()
+                prods += [(p["id"], p["name"]) for p in r.json()]
+                if len(r.json()) < 100:
+                    break
+            for page in range(1, 4):
+                r = c.get("products/categories", params={"per_page": 100, "page": page, "_fields": "id,name,count"})
+                r.raise_for_status()
+                cats += [(x["id"], x["name"]) for x in r.json() if x.get("count", 1)]
+                if len(r.json()) < 100:
+                    break
+        import html
+        datos = (sorted(((i, html.unescape(n)) for i, n in prods), key=lambda x: x[1].lower()),
+                 sorted(((i, html.unescape(n)) for i, n in cats), key=lambda x: x[1].lower()))
+    _LISTA_PRODUCTOS.update(t=time.time(), datos=datos)
+    return datos
 
 
 def cupones(buscar=""):
@@ -202,7 +246,8 @@ def cupones(buscar=""):
         return [{"id": 1, "code": "TW1126-AB12", "discount_type": "percent", "amount": "15.00", "status": "publish",
                  "date_expires": (date.today() + timedelta(days=10)).isoformat() + "T23:59:59", "usage_count": 3,
                  "email_restrictions": ["cliente1@ejemplo.cl", "cliente2@ejemplo.cl"], "description": "Campaña Mejores clientes",
-                 "minimum_amount": "0.00", "free_shipping": False, "usage_limit_per_user": 1}]
+                 "minimum_amount": "0.00", "free_shipping": False, "usage_limit_per_user": 1,
+                 "product_ids": [101], "excluded_product_ids": [], "product_categories": [], "excluded_product_categories": []}]
     out = []
     with _client() as c:
         for page in range(1, 4):

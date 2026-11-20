@@ -1,0 +1,24 @@
+{# Selector de productos/categorías donde aplica un cupón. Variables: prods, cats, sel_p, sel_c, sel_donde #}
+{% set sel_p = sel_p or [] %}{% set sel_c = sel_c or [] %}
+<details class="elige-prod" {{ 'open' if sel_p or sel_c }}>
+  <summary style="cursor:pointer"><b>¿En qué productos sirve el cupón?</b> <span class="sub conteo" style="font-size:12px">{{ 'En toda la tienda' if not (sel_p or sel_c) else (sel_p|length + sel_c|length) ~ ' elegidos' }}</span></summary>
+  <div style="margin-top:8px">
+    <label style="margin-right:14px"><input type="radio" name="donde" value="solo" style="width:auto" {{ 'checked' if sel_donde != 'excepto' }}> Solo en los que marque</label>
+    <label><input type="radio" name="donde" value="excepto" style="width:auto" {{ 'checked' if sel_donde == 'excepto' }}> En todos, menos los que marque</label>
+    <p class="sub" style="font-size:12px;margin:4px 0 8px">Si no marcas nada, el cupón sirve en toda la tienda. Al marcar un producto se incluyen todos sus colores.</p>
+    {% if not prods and not cats %}<div class="msg err">No pude leer los productos de la web en este momento. Recarga la página para intentarlo de nuevo.</div>{% endif %}
+    {% if cats %}<b style="font-size:13px">Categorías</b>
+    <div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0 10px">
+      {% for i, n in cats %}<label style="font-size:14px;font-weight:400;text-transform:none;letter-spacing:0"><input type="checkbox" name="cat" value="{{ i }}" style="width:auto" {{ 'checked' if i in sel_c }} onchange="cuentaProd(this)"> {{ n }}</label>{% endfor %}
+    </div>{% endif %}
+    {% if prods %}<b style="font-size:13px">Productos</b>
+    <input type="search" placeholder="Buscar producto…" oninput="filtraProd(this)" style="margin:4px 0;max-width:300px">
+    <div class="lista-prod" style="max-height:260px;overflow:auto;border:1px solid var(--linea);border-radius:8px;padding:6px 10px;columns:2 260px">
+      {% for i, n in prods %}<label style="display:block;font-size:14px;font-weight:400;text-transform:none;letter-spacing:0;break-inside:avoid"><input type="checkbox" name="prod" value="{{ i }}" style="width:auto" {{ 'checked' if i in sel_p }} onchange="cuentaProd(this)"> {{ n }}</label>{% endfor %}
+    </div>{% endif %}
+  </div>
+</details>
+<script>
+function filtraProd(inp){var q=inp.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');inp.parentNode.querySelectorAll('.lista-prod label').forEach(function(l){var t=l.textContent.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');l.style.display=t.indexOf(q)>=0?'block':'none'})}
+function cuentaProd(el){var d=el.closest('details');var n=d.querySelectorAll('input[name=prod]:checked,input[name=cat]:checked').length;d.querySelector('.conteo').textContent=n?n+' elegidos':'En toda la tienda'}
+</script>

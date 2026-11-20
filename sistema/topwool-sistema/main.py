@@ -27,6 +27,8 @@ BASE = Path(__file__).parent
 app = FastAPI(title="Sistema Topwool")
 tpl = Jinja2Templates(directory=BASE)
 tpl.env.globals["zip"] = zip
+tpl.env.globals["dict"] = dict
+tpl.env.filters["extrae"] = lambda i, d: d.get(i, f"#{i}")
 tpl.env.filters["clp"] = lambda v: "$" + f"{float(v or 0):,.0f}".replace(",", ".")
 tpl.env.filters["num"] = lambda v: "" if v is None else (f"{v:,.2f}".rstrip("0").rstrip(".").replace(",", "X").replace(".", ",").replace("X", ".") if isinstance(v, float) else v)
 

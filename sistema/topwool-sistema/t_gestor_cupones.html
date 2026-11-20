@@ -14,6 +14,7 @@
   <div class="campo c6"><label>Solo para estos correos (vacío = cualquiera)</label><input name="correos" value="{{ email }}" placeholder="cliente@correo.cl, otra@correo.cl"></div>
   <div class="campo c3"><label>Compra mínima ($)</label><input type="number" name="minimo" value="0" min="0"></div>
   <div class="campo c3"><label><input type="checkbox" name="envio_gratis" value="1" style="width:auto"> También envío gratis</label></div>
+  <div class="campo c12">{% set sel_p = [] %}{% set sel_c = [] %}{% set sel_donde = 'solo' %}{% include "t_gestor_productos.html" %}</div>
   <div class="campo c12"><label>Nota interna</label><input name="nota" placeholder="ej: premio por 10 compras"></div>
   <div class="campo c12"><label><input type="checkbox" name="avisar" value="1" style="width:auto" {{ 'checked' if email and smtp }} {{ 'disabled' if not smtp }}> Enviarle el cupón por correo{% if not smtp %} (falta configurar el correo en Render){% endif %}</label>
     <textarea name="mensaje" rows="6">Hola {nombre}:
@@ -31,13 +32,17 @@ Equipo Topwool</textarea></div>
 <form class="filtros" method="get"><input name="q" value="{{ q }}" placeholder="Buscar código" style="max-width:220px"><button class="sec">Buscar</button></form>
 {% if lista %}
 <div class="tabla-scroll"><table>
-<tr><th>Código</th><th>Descuento</th><th>Para</th><th>Vence</th><th class="n">Usado</th><th></th></tr>
+<tr><th>Código</th><th>Descuento</th><th>Para</th><th>Productos</th><th>Vence</th><th class="n">Usado</th><th></th></tr>
 {% for c in lista %}
 <tr>
 <td><b>{{ c.code|upper }}</b> <span class="chip {{ 'flow' if c.vigente else 'otro' }}">{{ 'activo' if c.vigente else ('pausado' if c.status != 'publish' else 'vencido') }}</span>
   {% if c.description %}<br><span class="sub" style="font-size:12px">{{ c.description }}</span>{% endif %}</td>
 <td>{{ (c.amount|float)|int }}{{ ' %' if c.discount_type=='percent' else ' $' }}{% if c.free_shipping %} + envío gratis{% endif %}{% if (c.minimum_amount or '0')|float > 0 %}<br><span class="sub" style="font-size:12px">mín. {{ (c.minimum_amount|float)|clp }}</span>{% endif %}</td>
 <td style="font-size:13px;max-width:260px">{% if c.email_restrictions %}{{ c.email_restrictions[:3]|join(', ') }}{% if c.email_restrictions|length > 3 %} y {{ c.email_restrictions|length - 3 }} más{% endif %}{% else %}cualquiera{% endif %}</td>
+<td style="font-size:12px;max-width:200px">{% set nom = dict(prods) %}{% set cnom = dict(cats) %}
+  {% if c.product_ids or c.product_categories %}Solo: {{ (c.product_ids|map('extrae', nom)|list + c.product_categories|map('extrae', cnom)|list)|join(', ') }}
+  {% elif c.excluded_product_ids or c.excluded_product_categories %}Todo menos: {{ (c.excluded_product_ids|map('extrae', nom)|list + c.excluded_product_categories|map('extrae', cnom)|list)|join(', ') }}
+  {% else %}Toda la tienda{% endif %}</td>
 <td style="white-space:nowrap">{{ c.vence[8:10] ~ '-' ~ c.vence[5:7] ~ '-' ~ c.vence[:4] if c.vence else 'sin fecha' }}</td>
 <td class="n">{{ c.usage_count }}</td>
 <td style="min-width:230px">
@@ -48,6 +53,13 @@ Equipo Topwool</textarea></div>
   <details style="margin-top:4px"><summary class="sub" style="font-size:12px;cursor:pointer">Cambiar a quién va</summary>
   <form method="post" action="/gestor/cupones/{{ c.id }}" style="display:flex;gap:4px;margin-top:4px">
     <input name="correos" value="{{ c.email_restrictions|join(', ') }}" style="font-size:13px"><button class="sec chico" name="accion" value="correos">Guardar</button>
+  </form></details>
+  <details style="margin-top:4px"><summary class="sub" style="font-size:12px;cursor:pointer">Cambiar productos</summary>
+  <form method="post" action="/gestor/cupones/{{ c.id }}" style="margin-top:4px;min-width:420px">
+    {% set excl = c.excluded_product_ids or c.excluded_product_categories %}
+    {% set sel_p = c.excluded_product_ids if excl else c.product_ids %}{% set sel_c = c.excluded_product_categories if excl else c.product_categories %}{% set sel_donde = 'excepto' if excl else 'solo' %}
+    {% include "t_gestor_productos.html" %}
+    <button class="sec chico" name="accion" value="productos" style="margin-top:6px">Guardar productos</button>
   </form></details>
 </td></tr>
 {% endfor %}

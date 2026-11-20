@@ -25,6 +25,7 @@
       <span class="sub" style="font-size:12px">Un código de un solo uso, válido solo para estos correos.</span></div>
     <div class="campo c4"><label>Descuento (%)</label><input type="number" name="porcentaje" value="{{ 15 if seg=='mejores' else 10 }}" min="1" max="60"></div>
     <div class="campo c4"><label>Días de vigencia</label><input type="number" name="dias" value="15" min="1" max="120"></div>
+    <div class="campo c12">{% set sel_p = [] %}{% set sel_c = [] %}{% set sel_donde = 'solo' %}{% include "t_gestor_productos.html" %}</div>
     <div class="campo c12"><label><input type="checkbox" name="saltar_recientes" value="1" style="width:auto" checked> No enviar a quienes recibieron otra campaña en los últimos 14 días</label></div>
   </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">

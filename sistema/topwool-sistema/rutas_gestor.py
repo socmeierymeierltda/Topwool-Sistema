@@ -55,6 +55,15 @@ def _base_url(request, aj):
     return u
 
 
+def _catalogo():
+    import woo
+    try:
+        return woo.productos_y_categorias()
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
+        return [], []
+
+
 def _lista(s, seg, aj):
     if seg == "contactos":
         return g.contactos(s)
@@ -165,12 +174,12 @@ def nueva_campana(request: Request, seg: str = "mejores", filtro: str = "", fond
     return _render(request, "gestor_campana.html", seg=seg, filtro=filtro, asunto=asunto, cuerpo=cuerpo, n=len(lista),
                    recientes=sum(1 for c in lista if c["email"] in ya_enviados), previas=previas, campanas=campanas,
                    segmentos=g.SEGMENTOS, plantillas=g.PLANTILLAS, aj=aj, fondo=fondo, pest="campanas",
-                   tipo=tipo, tipos=g.MENSAJES_NOMBRE,
+                   tipo=tipo, tipos=g.MENSAJES_NOMBRE, prods=_catalogo()[0], cats=_catalogo()[1],
                    smtp=bool(config.SMTP_USER and config.SMTP_PASSWORD), trabajo=TRABAJO, smtp_user=config.SMTP_USER)
 
 
 @router.post("/gestor/campana")
-def enviar_campana(request: Request, seg: str = Form(...), filtro: str = Form(""), nombre: str = Form(""),
+def enviar_campana(request: Request, prod: list[int] = Form([]), cat: list[int] = Form([]), donde: str = Form("solo"), seg: str = Form(...), filtro: str = Form(""), nombre: str = Form(""),
                    asunto: str = Form(...), cuerpo: str = Form(...), cupon: str = Form(""), porcentaje: int = Form(10),
                    dias: int = Form(15), prueba: str = Form(""), saltar_recientes: str = Form("")):
     aj = db.ajustes()
@@ -209,7 +218,9 @@ def enviar_campana(request: Request, seg: str = Form(...), filtro: str = Form(""
         camp["cupon"] = g.codigo_cupon()
         try:
             import woo
-            woo.crear_cupon(camp["cupon"], porcentaje, vence, [c["email"] for c in lista], f"Campaña {nombre or seg}")
+            pr, ct, ex = prod, cat, donde == "excepto"
+            woo.crear_cupon(camp["cupon"], porcentaje, vence, [c["email"] for c in lista], f"Campaña {nombre or seg}",
+                            productos=pr, categorias=ct, excluir=ex)
         except Exception as e:  # noqa: BLE001
             return _volver(request, f"/gestor/campana?seg={seg}&filtro={filtro}",
                            error=f"No pude crear el cupón en la web (no se envió nada): {str(e)[:200]}")
@@ -270,11 +281,12 @@ def cupones(request: Request, email: str = "", q: str = ""):
             nombre = c["nombre"] if c else ""
     return _render(request, "gestor_cupones.html", lista=lista, email=email, cliente_nombre=nombre, q=q, pest="cupones",
                    error_lectura=err, sugerido=g.codigo_cupon(), hoy=date.today(),
+                   prods=_catalogo()[0], cats=_catalogo()[1],
                    smtp=bool(config.SMTP_USER and config.SMTP_PASSWORD))
 
 
 @router.post("/gestor/cupones")
-def cupon_nuevo(request: Request, codigo: str = Form(...), tipo: str = Form("percent"), monto: float = Form(...),
+def cupon_nuevo(request: Request, prod: list[int] = Form([]), cat: list[int] = Form([]), donde: str = Form("solo"), codigo: str = Form(...), tipo: str = Form("percent"), monto: float = Form(...),
                 vence: str = Form(""), correos: str = Form(""), minimo: float = Form(0), usos: int = Form(1),
                 envio_gratis: str = Form(""), nota: str = Form(""), avisar: str = Form(""), mensaje: str = Form("")):
     import re as _re
@@ -283,7 +295,9 @@ def cupon_nuevo(request: Request, codigo: str = Form(...), tipo: str = Form("per
     codigo = _re.sub(r"[^A-Za-z0-9_-]", "", codigo).upper()
     vence_d = date.fromisoformat(vence) if vence else None
     try:
-        woo.crear_cupon(codigo, monto, vence_d, lista, nota or "Creado desde el sistema", tipo, minimo, usos, bool(envio_gratis))
+        pr, ct, ex = prod, cat, donde == "excepto"
+        woo.crear_cupon(codigo, monto, vence_d, lista, nota or "Creado desde el sistema", tipo, minimo, usos, bool(envio_gratis),
+                        productos=pr, categorias=ct, excluir=ex)
     except Exception as e:  # noqa: BLE001
         return _volver(request, "/gestor/cupones", error=f"La web no aceptó el cupón: {str(e)[:200]}")
     aviso = f"Cupón {codigo} creado en la web" + (f" solo para {', '.join(lista)}" if lista else " (para cualquier cliente)") + "."
@@ -305,9 +319,16 @@ def cupon_nuevo(request: Request, codigo: str = Form(...), tipo: str = Form("per
 
 
 @router.post("/gestor/cupones/{cid}")
-def cupon_cambiar(request: Request, cid: int, accion: str = Form(...), vence: str = Form(""), correos: str = Form("")):
+def cupon_cambiar(request: Request, cid: int, prod: list[int] = Form([]), cat: list[int] = Form([]), donde: str = Form("solo"), accion: str = Form(...), vence: str = Form(""), correos: str = Form("")):
     import re as _re
     import woo
+    if accion == "productos":
+        pr, ct, ex = prod, cat, donde == "excepto"
+        try:
+            woo.actualizar_cupon(cid, woo.restriccion_productos(pr, ct, ex))
+        except Exception as e:  # noqa: BLE001
+            return _volver(request, "/gestor/cupones", error=f"No pude cambiar el cupón: {str(e)[:200]}")
+        return _volver(request, "/gestor/cupones", aviso="Productos del cupón actualizados.")
     datos = {"pausar": {"status": "draft"}, "activar": {"status": "publish"},
              "vence": {"date_expires": (vence + "T23:59:59") if vence else None},
              "correos": {"email_restrictions": [e.strip().lower() for e in _re.split(r"[,;\s]+", correos) if "@" in e]}}.get(accion)
