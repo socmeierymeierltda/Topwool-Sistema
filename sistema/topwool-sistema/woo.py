@@ -176,14 +176,49 @@ def actualizar_stock(cambios):
     return n
 
 
-def crear_cupon(codigo, porcentaje, vence, correos, descripcion=""):
-    """Cupón de % de descuento, de un uso por persona y solo para los correos indicados."""
+def crear_cupon(codigo, monto, vence, correos, descripcion="", tipo="percent", minimo=0, usos=1, envio_gratis=False):
+    """Cupón de WooCommerce. tipo: percent (%) | fixed_cart ($ al carro). correos vacío = cualquiera."""
     if config.DEMO:
-        return {"code": codigo, "demo": True}
-    datos = {"code": codigo, "discount_type": "percent", "amount": str(porcentaje),
-             "individual_use": True, "usage_limit_per_user": 1, "description": descripcion[:200],
-             "date_expires": vence.isoformat() + "T23:59:59", "email_restrictions": list(correos)}
+        return {"id": 0, "code": codigo, "demo": True}
+    datos = {"code": codigo, "discount_type": tipo, "amount": str(monto), "individual_use": True,
+             "description": descripcion[:200], "free_shipping": bool(envio_gratis),
+             "date_expires": (vence.isoformat() + "T23:59:59") if vence else None,
+             "email_restrictions": list(correos or [])}
+    if usos:
+        datos["usage_limit_per_user"] = int(usos)
+    if minimo:
+        datos["minimum_amount"] = str(minimo)
     with _client() as c:
         r = c.post("coupons", json=datos)
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError((r.json() or {}).get("message", r.text)[:200])
         return r.json()
+
+
+def cupones(buscar=""):
+    """Cupones de la web, más recientes primero."""
+    if config.DEMO:
+        from datetime import date, timedelta
+        return [{"id": 1, "code": "TW1126-AB12", "discount_type": "percent", "amount": "15.00", "status": "publish",
+                 "date_expires": (date.today() + timedelta(days=10)).isoformat() + "T23:59:59", "usage_count": 3,
+                 "email_restrictions": ["cliente1@ejemplo.cl", "cliente2@ejemplo.cl"], "description": "Campaña Mejores clientes",
+                 "minimum_amount": "0.00", "free_shipping": False, "usage_limit_per_user": 1}]
+    out = []
+    with _client() as c:
+        for page in range(1, 4):
+            r = c.get("coupons", params={"per_page": 100, "page": page, "orderby": "date", "order": "desc",
+                                         **({"search": buscar} if buscar else {})})
+            r.raise_for_status()
+            out += r.json()
+            if len(r.json()) < 100:
+                break
+    return out
+
+
+def actualizar_cupon(cid, datos):
+    if config.DEMO:
+        return
+    with _client() as c:
+        r = c.put(f"coupons/{cid}", json=datos)
+        if r.status_code >= 400:
+            raise RuntimeError((r.json() or {}).get("message", r.text)[:200])

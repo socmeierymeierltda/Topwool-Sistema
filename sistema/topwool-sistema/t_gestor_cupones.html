@@ -1,0 +1,56 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_gestor_nav.html" %}
+{% if error_lectura %}<div class="msg err">{{ error_lectura }}</div>{% endif %}
+
+<details class="tarjeta" {{ 'open' if email or not lista }}>
+<summary><b>Crear cupón{% if cliente_nombre %} para {{ cliente_nombre }}{% endif %}</b></summary>
+<form method="post" action="/gestor/cupones" class="grilla" style="margin-top:10px">
+  <div class="campo c3"><label>Código</label><input name="codigo" value="{{ sugerido }}" required></div>
+  <div class="campo c3"><label>Tipo</label><select name="tipo"><option value="percent">% de descuento</option><option value="fixed_cart">$ de descuento al carro</option></select></div>
+  <div class="campo c2"><label>Valor</label><input type="number" name="monto" value="10" min="1" step="any" required></div>
+  <div class="campo c2"><label>Válido hasta</label><input type="date" name="vence" value="{{ (hoy.fromordinal(hoy.toordinal() + 15)).isoformat() }}"></div>
+  <div class="campo c2"><label>Usos por persona</label><input type="number" name="usos" value="1" min="0" title="0 = sin límite"></div>
+  <div class="campo c6"><label>Solo para estos correos (vacío = cualquiera)</label><input name="correos" value="{{ email }}" placeholder="cliente@correo.cl, otra@correo.cl"></div>
+  <div class="campo c3"><label>Compra mínima ($)</label><input type="number" name="minimo" value="0" min="0"></div>
+  <div class="campo c3"><label><input type="checkbox" name="envio_gratis" value="1" style="width:auto"> También envío gratis</label></div>
+  <div class="campo c12"><label>Nota interna</label><input name="nota" placeholder="ej: premio por 10 compras"></div>
+  <div class="campo c12"><label><input type="checkbox" name="avisar" value="1" style="width:auto" {{ 'checked' if email and smtp }} {{ 'disabled' if not smtp }}> Enviarle el cupón por correo{% if not smtp %} (falta configurar el correo en Render){% endif %}</label>
+    <textarea name="mensaje" rows="6">Hola {nombre}:
+
+Queremos agradecerte por tejer con Topwool. Te regalamos {descuento} de descuento en tu próxima compra en topwool.cl.
+
+Tu código: {cupon}  (válido hasta el {vence}).
+
+Un abrazo,
+Equipo Topwool</textarea></div>
+  <div class="c12"><button class="verde">Crear cupón en la web</button></div>
+</form>
+</details>
+
+<form class="filtros" method="get"><input name="q" value="{{ q }}" placeholder="Buscar código" style="max-width:220px"><button class="sec">Buscar</button></form>
+{% if lista %}
+<div class="tabla-scroll"><table>
+<tr><th>Código</th><th>Descuento</th><th>Para</th><th>Vence</th><th class="n">Usado</th><th></th></tr>
+{% for c in lista %}
+<tr>
+<td><b>{{ c.code|upper }}</b> <span class="chip {{ 'flow' if c.vigente else 'otro' }}">{{ 'activo' if c.vigente else ('pausado' if c.status != 'publish' else 'vencido') }}</span>
+  {% if c.description %}<br><span class="sub" style="font-size:12px">{{ c.description }}</span>{% endif %}</td>
+<td>{{ (c.amount|float)|int }}{{ ' %' if c.discount_type=='percent' else ' $' }}{% if c.free_shipping %} + envío gratis{% endif %}{% if (c.minimum_amount or '0')|float > 0 %}<br><span class="sub" style="font-size:12px">mín. {{ (c.minimum_amount|float)|clp }}</span>{% endif %}</td>
+<td style="font-size:13px;max-width:260px">{% if c.email_restrictions %}{{ c.email_restrictions[:3]|join(', ') }}{% if c.email_restrictions|length > 3 %} y {{ c.email_restrictions|length - 3 }} más{% endif %}{% else %}cualquiera{% endif %}</td>
+<td style="white-space:nowrap">{{ c.vence[8:10] ~ '-' ~ c.vence[5:7] ~ '-' ~ c.vence[:4] if c.vence else 'sin fecha' }}</td>
+<td class="n">{{ c.usage_count }}</td>
+<td style="min-width:230px">
+  <form method="post" action="/gestor/cupones/{{ c.id }}" style="display:flex;gap:4px;flex-wrap:wrap">
+    {% if c.status == 'publish' %}<button class="sec chico" name="accion" value="pausar">Pausar</button>{% else %}<button class="verde chico" name="accion" value="activar">Activar</button>{% endif %}
+    <input type="date" name="vence" value="{{ c.vence }}" style="width:auto;font-size:13px"><button class="sec chico" name="accion" value="vence">Cambiar fecha</button>
+  </form>
+  <details style="margin-top:4px"><summary class="sub" style="font-size:12px;cursor:pointer">Cambiar a quién va</summary>
+  <form method="post" action="/gestor/cupones/{{ c.id }}" style="display:flex;gap:4px;margin-top:4px">
+    <input name="correos" value="{{ c.email_restrictions|join(', ') }}" style="font-size:13px"><button class="sec chico" name="accion" value="correos">Guardar</button>
+  </form></details>
+</td></tr>
+{% endfor %}
+</table></div>
+{% else %}<div class="vacio">No hay cupones en la web{{ ' con ese código' if q }}.</div>{% endif %}
+{% endblock %}

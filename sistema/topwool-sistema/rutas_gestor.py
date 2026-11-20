@@ -248,6 +248,77 @@ def campanas(request: Request):
     return _render(request, "gestor_campanas.html", lista=lista, trabajo=TRABAJO, pest="campanas")
 
 
+# ---------------- cupones ----------------
+@router.get("/gestor/cupones", response_class=HTMLResponse)
+def cupones(request: Request, email: str = "", q: str = ""):
+    import woo
+    try:
+        lista = woo.cupones(q)
+        err = None
+    except Exception as e:  # noqa: BLE001
+        lista, err = [], f"No pude leer los cupones de la web: {str(e)[:200]}"
+    hoy = date.today().isoformat()
+    for c in lista:
+        vence = (c.get("date_expires") or "")[:10]
+        c["vence"] = vence
+        c["vigente"] = c.get("status") == "publish" and (not vence or vence >= hoy)
+    nombre = ""
+    if email:
+        with db.Session() as s:
+            c = next((x for x in g.clientes(s) if x["email"] == email.lower()), None)
+            nombre = c["nombre"] if c else ""
+    return _render(request, "gestor_cupones.html", lista=lista, email=email, cliente_nombre=nombre, q=q, pest="cupones",
+                   error_lectura=err, sugerido=g.codigo_cupon(), hoy=date.today(),
+                   smtp=bool(config.SMTP_USER and config.SMTP_PASSWORD))
+
+
+@router.post("/gestor/cupones")
+def cupon_nuevo(request: Request, codigo: str = Form(...), tipo: str = Form("percent"), monto: float = Form(...),
+                vence: str = Form(""), correos: str = Form(""), minimo: float = Form(0), usos: int = Form(1),
+                envio_gratis: str = Form(""), nota: str = Form(""), avisar: str = Form(""), mensaje: str = Form("")):
+    import re as _re
+    import woo
+    lista = [e.strip().lower() for e in _re.split(r"[,;\s]+", correos) if "@" in e]
+    codigo = _re.sub(r"[^A-Za-z0-9_-]", "", codigo).upper()
+    vence_d = date.fromisoformat(vence) if vence else None
+    try:
+        woo.crear_cupon(codigo, monto, vence_d, lista, nota or "Creado desde el sistema", tipo, minimo, usos, bool(envio_gratis))
+    except Exception as e:  # noqa: BLE001
+        return _volver(request, "/gestor/cupones", error=f"La web no aceptó el cupón: {str(e)[:200]}")
+    aviso = f"Cupón {codigo} creado en la web" + (f" solo para {', '.join(lista)}" if lista else " (para cualquier cliente)") + "."
+    if avisar and lista and mensaje.strip():
+        aj = db.ajustes()
+        desc = f"{monto:g} %" if tipo == "percent" else "$" + f"{monto:,.0f}".replace(",", ".")
+        camp = {"asunto": "Un regalo de Topwool para ti 🎁", "cuerpo": mensaje.replace("\r\n", "\n"), "cupon": codigo,
+                "descuento_txt": desc, "vence": vence_d, "responder_a": aj.get("gestor_responder_a")}
+        with db.Session() as s:
+            todos = {c["email"]: c for c in g.clientes(s)}
+        dest = [todos.get(e) or {"email": e, "nombre": ""} for e in lista]
+        try:
+            res = g.enviar(dest, camp, _base_url(request, aj), pausa=0.5)
+            ok = sum(1 for r in res if r[1])
+            aviso += f" Correo enviado a {ok} de {len(dest)}."
+        except Exception as e:  # noqa: BLE001
+            return _volver(request, "/gestor/cupones", aviso=aviso, error=f"No pude enviar el correo: {str(e)[:150]}")
+    return _volver(request, "/gestor/cupones", aviso=aviso)
+
+
+@router.post("/gestor/cupones/{cid}")
+def cupon_cambiar(request: Request, cid: int, accion: str = Form(...), vence: str = Form(""), correos: str = Form("")):
+    import re as _re
+    import woo
+    datos = {"pausar": {"status": "draft"}, "activar": {"status": "publish"},
+             "vence": {"date_expires": (vence + "T23:59:59") if vence else None},
+             "correos": {"email_restrictions": [e.strip().lower() for e in _re.split(r"[,;\s]+", correos) if "@" in e]}}.get(accion)
+    if not datos:
+        return _volver(request, "/gestor/cupones")
+    try:
+        woo.actualizar_cupon(cid, datos)
+    except Exception as e:  # noqa: BLE001
+        return _volver(request, "/gestor/cupones", error=f"No pude cambiar el cupón: {str(e)[:200]}")
+    return _volver(request, "/gestor/cupones", aviso="Cupón actualizado en la web.")
+
+
 # ---------------- baja (pública, sin clave) ----------------
 @router.api_route("/baja", methods=["GET", "POST"], response_class=HTMLResponse)
 def baja(e: str = "", t: str = ""):

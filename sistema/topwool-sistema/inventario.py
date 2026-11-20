@@ -33,8 +33,49 @@ def leer_inventario_defontana(contenido: bytes) -> dict:
     return saldos
 
 
-def comparar(saldos: dict, catalogo: dict):
-    """Arma la tabla de diferencias entre Defontana y la web."""
+def _num(v, defecto=None):
+    try:
+        return float(str(v).replace(",", ".")) if str(v).strip() != "" else defecto
+    except ValueError:
+        return defecto
+
+
+def condiciones(aj):
+    """Reglas para pasar del inventario real al stock que se muestra en la web."""
+    reserva_cod = {}
+    for par in db.lista(aj.get("inv_reserva_codigos", "")):
+        if "=" in par:
+            k, v = par.split("=", 1)
+            reserva_cod[k.strip().upper()] = _num(v, 0)
+    return {"reserva": _num(aj.get("inv_reserva"), 0), "reserva_cod": reserva_cod,
+            "minimo": _num(aj.get("inv_minimo"), 0), "maximo": _num(aj.get("inv_maximo")),
+            "no_tocar": [x.lower() for x in db.lista(aj.get("inv_no_tocar", ""))]}
+
+
+def stock_web(saldo, factor, cod, nombre, c):
+    """Devuelve (stock para la web, nota de la regla aplicada)."""
+    notas = []
+    reserva = c["reserva_cod"].get(cod, c["reserva"]) if c else 0
+    if reserva:
+        notas.append(f"reserva {reserva:g}")
+    n = max(0, math.floor((saldo - reserva) / (factor or 1) + 1e-9))
+    if c and c["minimo"] and 0 < n < c["minimo"]:
+        notas.append(f"menos de {c['minimo']:g} → agotado")
+        n = 0
+    if c and c["maximo"] is not None and n > c["maximo"]:
+        notas.append(f"tope {c['maximo']:g}")
+        n = int(c["maximo"])
+    return n, ", ".join(notas)
+
+
+def no_tocar(cod, nombre, c):
+    t = f"{cod} {nombre or ''}".lower()
+    return bool(c) and any(x in t for x in c["no_tocar"])
+
+
+def comparar(saldos: dict, catalogo: dict, aj=None):
+    """Arma la tabla de diferencias entre Defontana y la web, aplicando las condiciones de Ajustes."""
+    c = condiciones(aj) if aj else None
     with db.Session() as s:
         eqs = [e for e in s.scalars(select(db.Equivalencia)) if e.codigo_defontana]
     filas = []
@@ -43,15 +84,16 @@ def comparar(saldos: dict, catalogo: dict):
         if cod not in saldos:
             continue
         factor = e.factor or 1
-        deberia = max(0, math.floor(saldos[cod] / factor + 1e-9))
+        deberia, regla = stock_web(saldos[cod], factor, cod, e.nombre_web, c)
         web = catalogo.get(e.woo_id, {})
         actual = web.get("stock")
+        fijo = no_tocar(cod, e.nombre_web, c)
         filas.append({
             "woo_id": e.woo_id, "parent": web.get("parent", 0), "nombre": e.nombre_web,
             "produccion": e.nombre_produccion, "unidad": e.unidad, "codigo": cod,
             "saldo": saldos[cod], "factor": factor, "deberia": deberia, "actual": actual,
-            "en_web": bool(web),
-            "difiere": web and actual != deberia,
+            "en_web": bool(web), "regla": regla, "no_tocar": fijo,
+            "difiere": bool(web) and actual != deberia and not fijo,
         })
     filas.sort(key=lambda f: (not f["difiere"], f["nombre"] or ""))
     return filas

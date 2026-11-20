@@ -16,6 +16,19 @@
   {% if fecha %}<p class="sub" style="margin:8px 0 0">Última comparación: {{ archivo }} · {{ fecha.strftime('%d-%m-%Y %H:%M') }}</p>{% endif %}
 </div>
 
+<details class="tarjeta" {{ 'open' if not fecha }}>
+  <summary><b>Condiciones para pasar del inventario real a la web</b>{% if aj.inv_auto %} · <span class="chip flow">actualiza sola al subir el archivo</span>{% endif %}</summary>
+  <form method="post" action="/inventario/condiciones" class="grilla" style="margin-top:10px">
+    <div class="campo c3"><label>Reserva por producto (se descuenta del real)</label><input name="inv_reserva" value="{{ aj.inv_reserva }}"><span class="sub" style="font-size:12px">En la unidad de Defontana (kg o unidades).</span></div>
+    <div class="campo c3"><label>Si quedan menos de… mostrar agotado</label><input name="inv_minimo" value="{{ aj.inv_minimo }}"></div>
+    <div class="campo c3"><label>Tope máximo visible en la web</label><input name="inv_maximo" value="{{ aj.inv_maximo }}" placeholder="sin tope"></div>
+    <div class="campo c3"><label><input type="checkbox" name="inv_auto" value="1" style="width:auto" {{ 'checked' if aj.inv_auto }}> Actualizar la web sola al subir el archivo</label><span class="sub" style="font-size:12px">Si el archivo dejaría agotada más de un tercio de la web, se detiene y te pide revisar.</span></div>
+    <div class="campo c6"><label>Reserva distinta por código (CÓDIGO=cantidad, separados por coma)</label><input name="inv_reserva_codigos" value="{{ aj.inv_reserva_codigos }}" placeholder="HIMALALROJO=2, HICDKMENTA=1"></div>
+    <div class="campo c6"><label>Nunca tocar en la web (códigos o palabras del nombre)</label><input name="inv_no_tocar" value="{{ aj.inv_no_tocar }}" placeholder="kit, gift card, preventa"></div>
+    <div class="c12"><button class="sec">Guardar condiciones</button></div>
+  </form>
+</details>
+
 {% if total %}
 <div class="filtros">
   <a class="boton {{ '' if solo=='dif' else 'sec' }}" href="?solo=dif">Con diferencia ({{ n_dif }})</a>
@@ -33,7 +46,7 @@
 <td style="font-size:12px">{{ f.codigo }}</td>
 <td class="n">{{ f.saldo|num }}</td>
 <td class="n">{{ f.actual if f.actual is not none else ('—' if f.en_web else 'no está en la web') }}</td>
-<td class="n"><b>{{ f.deberia }}</b></td>
+<td class="n"><b>{{ f.deberia }}</b>{% if f.regla %}<br><span class="sub" style="font-size:11px">{{ f.regla }}</span>{% endif %}{% if f.no_tocar %}<br><span class="chip">no se toca</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </table></div>

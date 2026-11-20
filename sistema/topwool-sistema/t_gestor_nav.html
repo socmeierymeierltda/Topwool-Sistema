@@ -1,6 +1,6 @@
 <h1>Gestor web</h1>
 <div class="filtros" style="margin-bottom:14px">
-  {% for k, n, u in [('clientes','Clientes','/gestor'),('campanas','Campañas','/gestor/campana'),('mercado','Mercado Público','/gestor/mercado'),('fondos','Fondos públicos','/gestor/fondos')] %}
+  {% for k, n, u in [('clientes','Clientes','/gestor'),('campanas','Campañas','/gestor/campana'),('cupones','Cupones','/gestor/cupones'),('mercado','Mercado Público','/gestor/mercado'),('fondos','Fondos públicos','/gestor/fondos')] %}
   <a class="boton {{ '' if pest==k else 'sec' }}" href="{{ u }}">{{ n }}</a>{% endfor %}
 </div>
 {% if trabajo and trabajo.estado == 'procesando' %}

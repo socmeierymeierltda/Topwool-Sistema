@@ -422,7 +422,7 @@ def ver_inventario(request: Request, solo: str = "dif"):
             request.session["aviso"] = trabajo.get("mensaje")
         else:
             request.session["error"] = trabajo.get("mensaje")
-    return render(request, "inventario.html", filas=vista, total=len(filas),
+    return render(request, "inventario.html", filas=vista, total=len(filas), aj=db.ajustes(),
                   n_dif=sum(1 for f in filas if f["difiere"]), solo=solo, trabajo=trabajo,
                   fecha=ULTIMA_COMPARACION["fecha"], archivo=ULTIMA_COMPARACION["archivo"])
 
@@ -465,11 +465,33 @@ async def comparar_inventario(request: Request, archivo: UploadFile = File(...))
         with db.Session() as s:
             productos.guardar_stock(s, saldos)
             s.commit()
-        ULTIMA_COMPARACION.update(filas=inventario.comparar(saldos, catalogo), fecha=datetime.now(), archivo=nombre)
-        n_dif = sum(1 for f in ULTIMA_COMPARACION["filas"] if f["difiere"])
-        return f"Comparación lista: {len(saldos)} artículos de Defontana, {n_dif} productos con diferencia."
+        aj = db.ajustes()
+        filas = inventario.comparar(saldos, catalogo, aj)
+        ULTIMA_COMPARACION.update(filas=filas, fecha=datetime.now(), archivo=nombre)
+        dif = [f for f in filas if f["difiere"] and f["en_web"]]
+        msg = f"Comparación lista: {len(saldos)} artículos de Defontana, {len(dif)} productos con diferencia."
+        if aj.get("inv_auto") and dif:
+            # seguro: si el archivo dejaría agotada a más de un tercio de la web, no se aplica solo
+            a_cero = sum(1 for f in dif if f["deberia"] == 0 and (f["actual"] or 0) > 0)
+            if a_cero > max(5, len([f for f in filas if f["en_web"]]) / 3):
+                return msg + f" No lo apliqué solo: {a_cero} productos quedarían agotados. Revisa el archivo y actualiza a mano."
+            avance(f"Actualizando {len(dif)} productos en la web…")
+            n = woo.actualizar_stock([{"id": f["woo_id"], "parent": f["parent"], "stock": f["deberia"]} for f in dif])
+            for f in dif:
+                f["actual"], f["difiere"] = f["deberia"], False
+            msg += f" Se actualizaron solos {n} productos en la web" + (" (modo demo: no se cambió la web)." if config.DEMO else ".")
+        return msg
     _en_segundo_plano(tarea)
     return RedirectResponse("/inventario", status_code=303)
+
+
+@app.post("/inventario/condiciones")
+async def condiciones_inventario(request: Request):
+    form = await request.form()
+    datos = {k: v for k, v in form.items() if k.startswith("inv_")}
+    datos["inv_auto"] = "1" if form.get("inv_auto") else ""
+    db.guardar_ajustes(datos)
+    return volver(request, "/inventario", aviso="Condiciones guardadas. Se aplican desde la próxima comparación.")
 
 
 @app.post("/inventario/actualizar")
@@ -479,7 +501,7 @@ async def actualizar_inventario(request: Request):
     form = await request.form()
     elegidos = {int(x) for x in form.getlist("ids")}
     cambios = [{"id": f["woo_id"], "parent": f["parent"], "stock": f["deberia"]}
-               for f in ULTIMA_COMPARACION["filas"] if f["woo_id"] in elegidos and f["en_web"]]
+               for f in ULTIMA_COMPARACION["filas"] if f["woo_id"] in elegidos and f["en_web"] and not f.get("no_tocar")]
     if not cambios:
         return volver(request, "/inventario", error="No elegiste productos para actualizar.")
 

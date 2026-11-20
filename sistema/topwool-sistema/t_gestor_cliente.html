@@ -17,6 +17,7 @@
     <input type="hidden" name="email" value="{{ c.email }}"><input type="hidden" name="volver" value="/gestor/cliente?k={{ c.clave|urlencode }}">
     {% if c.no_contactar %}<span class="chip otro">No quiere recibir campañas</span> <button class="sec chico" name="quitar" value="1">Volver a permitir</button>
     {% else %}<button class="sec chico">No enviarle campañas</button>{% endif %}
+    <a class="boton verde chico" href="/gestor/cupones?email={{ c.email|urlencode }}">Crear cupón para este cliente</a>
   </form>{% endif %}
 </div>
 <div class="grilla">

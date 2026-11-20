@@ -78,6 +78,13 @@ DEFAULTS = {
     "aviso_despacho": ("¡Hola {nombre}! Tu pedido de Topwool ya va en camino 🚚\n"
                        "Empresa de transporte: {empresa}\nN° de seguimiento: {tracking}\n"
                        "Puedes seguirlo aquí: {link}\n\n¡Gracias por tejer con nosotros!"),
+    # Inventario: del stock real (Defontana) al stock que se publica en la web
+    "inv_reserva": "0",
+    "inv_reserva_codigos": "",
+    "inv_minimo": "0",
+    "inv_maximo": "",
+    "inv_no_tocar": "",
+    "inv_auto": "",
     # Gestor web
     "gestor_dias_dormido": "180",
     "gestor_max_envios": "300",
