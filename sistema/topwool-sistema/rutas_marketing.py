@@ -116,8 +116,8 @@ def generar(request: Request, mes: str = Form(...), reemplazar: str = Form("")):
 
 
 @router.post("/marketing/ritmo")
-def guardar_ritmo(request: Request, marketing_ritmo: str = Form(""), mes: str = Form("")):
-    db.guardar_ajustes({"marketing_ritmo": marketing_ritmo})
+def guardar_ritmo(request: Request, marketing_ritmo: str = Form(""), mes: str = Form(""), marketing_auto: str = Form("")):
+    db.guardar_ajustes({"marketing_ritmo": marketing_ritmo, "marketing_auto": "1" if marketing_auto else ""})
     return _volver(request, f"/marketing/calendario?mes={mes}", aviso="Ritmo semanal guardado.")
 
 

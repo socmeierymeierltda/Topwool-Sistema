@@ -514,6 +514,13 @@ def iniciar_automatico():
                 if mp.hay_ticket() and vieja and not _ocupado():
                     _en_fondo("mercado", _buscar_mp)
                     time.sleep(300)
+                try:
+                    import marketing as mk
+                    with db.Session() as s:
+                        if mk.armar_automatico(s, db.ajustes()):
+                            s.commit()
+                except Exception:  # noqa: BLE001
+                    traceback.print_exc()
                 ultf = db.ajustes().get("fondos_ultima_busqueda") or ""
                 if (not ultf or datetime.fromisoformat(ultf) < datetime.now() - timedelta(hours=24)) and not _ocupado() \
                         and not config.DEMO:

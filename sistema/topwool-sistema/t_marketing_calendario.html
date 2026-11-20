@@ -61,6 +61,7 @@
     <input type="hidden" name="mes" value="{{ '%d-%02d'|format(y, m) }}">
     <textarea name="marketing_ritmo" rows="3">{{ aj.marketing_ritmo }}</textarea>
     <p class="sub" style="font-size:12px;margin:4px 0">Formato: día=tipo, separados por coma. Tipos: Carrusel de producto, Reel, Historias, Comunidad, Correo, Meta Ads, Banner web, WhatsApp mayoristas, Correo mayoristas, Instagram mayoristas.</p>
+    <label style="font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;display:block;margin-bottom:8px"><input type="checkbox" name="marketing_auto" value="1" style="width:auto" {{ 'checked' if aj.marketing_auto }}> Armar la grilla sola: el mes actual si está vacío y el mes siguiente a partir del día 20</label>
     <button class="sec chico">Guardar</button>
   </form>
 </details>

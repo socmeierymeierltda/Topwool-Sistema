@@ -508,3 +508,23 @@ def utm(url, canal, campana):
     camp = re.sub(r"[^a-z0-9]+", "-", cb.norm(campana or "siempre")).strip("-") or "siempre"
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}utm_source={fuente}&utm_medium={medio}&utm_campaign={quote(camp)}"
+
+
+def armar_automatico(s, aj, hoy=None):
+    """Arma sola la grilla del mes actual (si está vacía) y la del mes siguiente desde el día 20."""
+    hoy = hoy or date.today()
+    if not aj.get("marketing_auto"):
+        return []
+    sig = (hoy.replace(day=28) + timedelta(days=5)).replace(day=1)
+    meses = [(hoy.year, hoy.month)] + ([(sig.year, sig.month)] if hoy.day >= 20 else [])
+    hechos = []
+    for y, m in meses:
+        ini = date(y, m, 1)
+        fin = date(y, m, calendar.monthrange(y, m)[1])
+        hay = s.scalar(select(func.count()).select_from(Pieza).where(Pieza.fecha >= ini, Pieza.fecha <= fin))
+        if not hay:
+            cargar_eventos(s, [y, y + 1])
+            s.flush()
+            generar_mes(s, y, m, aj)
+            hechos.append(f"{MESES[m - 1]} {y}")
+    return hechos
