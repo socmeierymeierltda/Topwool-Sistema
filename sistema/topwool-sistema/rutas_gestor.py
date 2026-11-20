@@ -141,9 +141,9 @@ async def subir_contactos(request: Request, archivo: UploadFile = File(...), tip
 
 # ---------------- campañas ----------------
 @router.get("/gestor/campana", response_class=HTMLResponse)
-def nueva_campana(request: Request, seg: str = "mejores", filtro: str = "", fondo: int = 0):
+def nueva_campana(request: Request, seg: str = "mejores", filtro: str = "", fondo: int = 0, tipo: str = ""):
     aj = db.ajustes()
-    asunto, cuerpo = g.PLANTILLAS.get(seg, g.PLANTILLAS["todos"])
+    asunto, cuerpo = g.MENSAJES.get(tipo) or g.PLANTILLAS.get(seg, g.PLANTILLAS["todos"])
     with db.Session() as s:
         lista = [c for c in g.segmento(_lista(s, seg, aj), seg, filtro) if c["email"] and not c["no_contactar"]]
         f = s.get(g.Fondo, fondo) if fondo else None
@@ -165,6 +165,7 @@ def nueva_campana(request: Request, seg: str = "mejores", filtro: str = "", fond
     return _render(request, "gestor_campana.html", seg=seg, filtro=filtro, asunto=asunto, cuerpo=cuerpo, n=len(lista),
                    recientes=sum(1 for c in lista if c["email"] in ya_enviados), previas=previas, campanas=campanas,
                    segmentos=g.SEGMENTOS, plantillas=g.PLANTILLAS, aj=aj, fondo=fondo, pest="campanas",
+                   tipo=tipo, tipos=g.MENSAJES_NOMBRE,
                    smtp=bool(config.SMTP_USER and config.SMTP_PASSWORD), trabajo=TRABAJO, smtp_user=config.SMTP_USER)
 
 
@@ -411,9 +412,44 @@ def fondos(request: Request):
     hoy = date.today()
     with db.Session() as s:
         lista = list(s.scalars(select(g.Fondo).order_by(g.Fondo.cierra.is_(None), g.Fondo.cierra)))
-    vig = [f for f in lista if not f.cierra or f.cierra >= hoy]
-    cerr = [f for f in lista if f.cierra and f.cierra < hoy]
-    return _render(request, "gestor_fondos.html", vigentes=vig, cerrados=cerr[-20:], fuentes=g.FUENTES, hoy=hoy, pest="fondos")
+    revisar = [f for f in lista if f.estado == "por_revisar" and (not f.cierra or f.cierra >= hoy)]
+    vig = [f for f in lista if f.estado not in ("por_revisar", "descartado") and (not f.cierra or f.cierra >= hoy)]
+    cerr = [f for f in lista if f.estado not in ("por_revisar", "descartado") and f.cierra and f.cierra < hoy]
+    return _render(request, "gestor_fondos.html", vigentes=vig, revisar=revisar, cerrados=cerr[-20:], fuentes=g.FUENTES,
+                   hoy=hoy, pest="fondos", aj=db.ajustes(), trabajo=TRABAJO)
+
+
+def _buscar_fondos(avance):
+    import fondos as fd
+    r = fd.buscar(avance)
+    return f"Fondos: {r['nuevos']} nuevos para revisar ({r['revisados']} enlaces encontrados)."
+
+
+@router.post("/gestor/fondos/buscar")
+def fondos_buscar(request: Request):
+    if _ocupado():
+        return _volver(request, "/gestor/fondos", error="Ya hay una tarea en curso; espera a que termine.")
+    _en_fondo("fondos", _buscar_fondos)
+    return _volver(request, "/gestor/fondos", aviso="Buscando fondos en las páginas oficiales y noticias… tarda 1 a 2 minutos.")
+
+
+@router.post("/gestor/fondos/{fid}/revisar")
+def fondo_revisar(request: Request, fid: int, accion: str = Form(...), cierra: str = Form("")):
+    with db.Session() as s:
+        f = s.get(g.Fondo, fid)
+        if f:
+            f.estado = "vigente" if accion == "sirve" else "descartado"
+            if cierra:
+                f.cierra = date.fromisoformat(cierra)
+            s.commit()
+    return _volver(request, "/gestor/fondos", aviso="Agregado a la lista de fondos." if accion == "sirve" else "Descartado.")
+
+
+@router.post("/gestor/fondos/ajustes")
+async def fondos_ajustes(request: Request):
+    form = await request.form()
+    db.guardar_ajustes({k: v.replace("\r\n", "\n") for k, v in form.items() if k.startswith("fondos_")})
+    return _volver(request, "/gestor/fondos", aviso="Fuentes guardadas.")
 
 
 @router.post("/gestor/fondos")
@@ -422,6 +458,7 @@ def fondo_nuevo(request: Request, nombre: str = Form(...), institucion: str = Fo
     with db.Session() as s:
         f = s.get(g.Fondo, fid) if fid else g.Fondo()
         f.nombre, f.institucion, f.region, f.url, f.nota = nombre[:250], institucion[:80], region[:80], url[:400], nota
+        f.estado = "vigente"
         f.abre = date.fromisoformat(abre) if abre else None
         f.cierra = date.fromisoformat(cierra) if cierra else None
         if not fid:
@@ -442,7 +479,7 @@ def fondo_borrar(request: Request, fid: int):
 
 # ---------------- búsqueda automática diaria ----------------
 def iniciar_automatico():
-    """Revisa Mercado Público sola dos veces al día (si hay ticket)."""
+    """Revisa Mercado Público dos veces al día (si hay ticket) y los fondos una vez al día."""
     def bucle():
         time.sleep(90)
         while True:
@@ -451,6 +488,11 @@ def iniciar_automatico():
                 vieja = not ult or datetime.fromisoformat(ult) < datetime.now() - timedelta(hours=12)
                 if mp.hay_ticket() and vieja and not _ocupado():
                     _en_fondo("mercado", _buscar_mp)
+                    time.sleep(300)
+                ultf = db.ajustes().get("fondos_ultima_busqueda") or ""
+                if (not ultf or datetime.fromisoformat(ultf) < datetime.now() - timedelta(hours=24)) and not _ocupado() \
+                        and not config.DEMO:
+                    _en_fondo("fondos", _buscar_fondos)
             except Exception:  # noqa: BLE001
                 traceback.print_exc()
             time.sleep(1800)

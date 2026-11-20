@@ -90,6 +90,30 @@ DEFAULTS = {
     "gestor_max_envios": "300",
     "gestor_responder_a": "contacto@topwool.cl",
     "gestor_url_publica": "",
+    # Fondos públicos: páginas que se revisan solas (una por línea) y búsquedas de noticias
+    "fondos_fuentes": "\n".join([
+        "https://www.sercotec.cl/convocatorias/",
+        "https://www.fondos.gob.cl/",
+        "https://www.corfo.cl/sites/cpp/convocatorias_y_programas",
+        "https://www.fondosdecultura.cl/",
+        "https://www.conadi.gob.cl/",
+        "https://www.fosis.gob.cl/",
+        "https://www.indap.gob.cl/",
+        "https://www.gorearaucania.cl/",
+    ]),
+    "fondos_noticias": "\n".join([
+        "convocatoria fondo artesanía",
+        "convocatoria Sercotec Araucanía",
+        "fondo concursable artesanas tejedoras",
+        "CONADI fondo emprendimiento postulación",
+        "INDAP artesanía convocatoria",
+    ]),
+    "fondos_palabras": ("convocatoria, postulacion, postula, fondo, capital semilla, capital abeja, crece, concurso, "
+                        "subsidio, emprende, fomento, fortalece, financiamiento, artesan"),
+    "fondos_excluir": ("resultado, ganador, seleccionad, adjudica, nomina, acta de, preguntas frecuentes, iniciar sesion, "
+                       "login, licitacion, cuenta publica, transparencia, trabaja con nosotros, concurso publico para"),
+    "fondos_ultima_busqueda": "",
+    "fondos_resumen": "",
     # Mercado Público
     "mp_palabras": ("lana, hilo, hilado, vellon, vellón, algodon, algodón, ovillo, madeja, telar, fieltro, "
                     "tejido, tejer, palillo, crochet, merino, alpaca, mohair, artesania textil"),

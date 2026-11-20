@@ -6,6 +6,6 @@
 {% if trabajo and trabajo.estado == 'procesando' %}
 <div class="msg demo" id="trabajo">⏳ {{ trabajo.mensaje }}</div>
 <script>setTimeout(function(){location.reload()}, 4000)</script>
-{% elif trabajo and trabajo.estado in ('listo','error') and trabajo.tipo == {'campanas':'campana','mercado':'mercado'}.get(pest) %}
+{% elif trabajo and trabajo.estado in ('listo','error') and trabajo.tipo == {'campanas':'campana','mercado':'mercado','fondos':'fondos'}.get(pest) %}
 <div class="msg {{ 'ok' if trabajo.estado=='listo' else 'err' }}">{{ trabajo.mensaje }}</div>
 {% endif %}

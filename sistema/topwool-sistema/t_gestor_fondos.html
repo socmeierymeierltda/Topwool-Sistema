@@ -1,7 +1,26 @@
 {% extends "t_base.html" %}
 {% block contenido %}
 {% include "t_gestor_nav.html" %}
-<p class="sub">Convocatorias de fondos públicos que pueden usar artesanas, agrupaciones y emprendedoras para comprar materiales. Cuando abra uno, avísales a tus clientes y ofréceles una cotización formal para su postulación.</p>
+<p class="sub">Convocatorias de fondos públicos que pueden usar artesanas, agrupaciones y emprendedoras para comprar materiales. El sistema revisa una vez al día las páginas oficiales y las noticias, y deja lo que encuentra <b>por revisar</b>. Tú marcas los que sirven y avisas a tus clientes.{% if aj.fondos_ultima_busqueda %} Última revisión: {{ aj.fondos_ultima_busqueda.replace('T', ' ') }}.{% endif %}</p>
+<form method="post" action="/gestor/fondos/buscar" style="margin-bottom:14px"><button class="verde" {{ 'disabled' if trabajo.estado=='procesando' }}>Buscar fondos ahora</button></form>
+
+{% if revisar %}
+<div class="tarjeta" style="border-left:4px solid var(--amarillo)">
+<b>Por revisar ({{ revisar|length }})</b> <span class="sub">— encontrados solos; abre el enlace, y si sirve, agrégalo (pon la fecha de cierre si no la detectó).</span>
+<div class="tabla-scroll" style="margin-top:8px"><table>
+{% for f in revisar %}
+<tr><td><b>{{ f.nombre }}</b><br><span class="sub" style="font-size:12px">{{ f.institucion or f.origen }}{% if f.region %} · {{ f.region }}{% endif %}{% if f.nota %} · {{ f.nota[:160] }}{% endif %}</span></td>
+<td style="min-width:330px">
+  <form method="post" action="/gestor/fondos/{{ f.id }}/revisar" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+    {% if f.url %}<a class="boton sec chico" target="_blank" href="{{ f.url }}">Abrir</a>{% endif %}
+    <input type="date" name="cierra" value="{{ f.cierra.isoformat() if f.cierra }}" title="Fecha de cierre" style="width:auto;font-size:13px">
+    <button class="verde chico" name="accion" value="sirve">Sirve</button>
+    <button class="sec chico" name="accion" value="no">No sirve</button>
+  </form></td></tr>
+{% endfor %}
+</table></div></div>
+{% endif %}
+<h2 style="font-size:18px;margin:18px 0 8px">Fondos abiertos</h2>
 
 {% if vigentes %}
 <div class="tabla-scroll"><table>
@@ -16,10 +35,10 @@
   <form method="post" action="/gestor/fondos/{{ f.id }}/borrar" style="display:inline" onsubmit="return confirm('¿Borrar?')"><button class="sec chico">Borrar</button></form></td></tr>
 {% endfor %}
 </table></div>
-{% else %}<div class="vacio">No hay fondos abiertos registrados. Agrégalos abajo cuando te llegue el aviso semanal.</div>{% endif %}
+{% else %}<div class="vacio">No hay fondos abiertos en la lista. Revisa los «por revisar» o agrega uno a mano.</div>{% endif %}
 
-<details class="tarjeta" style="margin-top:16px" {{ 'open' if not vigentes }}>
-<summary><b>Agregar fondo</b></summary>
+<details class="tarjeta" style="margin-top:16px">
+<summary><b>Agregar fondo a mano</b></summary>
 <form method="post" action="/gestor/fondos" class="grilla" style="margin-top:10px">
   <div class="campo c6"><label>Nombre</label><input name="nombre" required placeholder="Capital Semilla Emprende 2027"></div>
   <div class="campo c3"><label>Institución</label><input name="institucion" list="inst" placeholder="Sercotec"></div>
@@ -33,6 +52,16 @@
 </form>
 </details>
 
+<details class="tarjeta">
+<summary><b>Dónde busca el sistema</b>{% if aj.fondos_resumen %} <span class="sub" style="font-size:12px">— última vez: {{ aj.fondos_resumen[:300] }}</span>{% endif %}</summary>
+<form method="post" action="/gestor/fondos/ajustes" class="grilla" style="margin-top:10px">
+  <div class="campo c6"><label>Páginas de convocatorias (una por línea)</label><textarea name="fondos_fuentes" rows="8">{{ aj.fondos_fuentes }}</textarea></div>
+  <div class="campo c6"><label>Búsquedas en noticias (una por línea)</label><textarea name="fondos_noticias" rows="8">{{ aj.fondos_noticias }}</textarea></div>
+  <div class="campo c6"><label>El título debe tener alguna de estas palabras</label><textarea name="fondos_palabras" rows="2">{{ aj.fondos_palabras }}</textarea></div>
+  <div class="campo c6"><label>Ignorar si el título dice</label><textarea name="fondos_excluir" rows="2">{{ aj.fondos_excluir }}</textarea></div>
+  <div class="c12"><button class="sec">Guardar</button></div>
+</form>
+</details>
 <div class="tarjeta"><b>Dónde se publican</b>
 <table style="margin-top:6px">{% for i, d, u in fuentes %}<tr><td><b>{{ i }}</b></td><td style="font-size:13px">{{ d }}</td><td><a href="{{ u }}" target="_blank">abrir</a></td></tr>{% endfor %}</table>
 </div>

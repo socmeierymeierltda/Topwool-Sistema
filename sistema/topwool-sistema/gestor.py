@@ -58,6 +58,22 @@ PLANTILLAS = {
 }
 
 
+# Mensajes que sirven para cualquier grupo (se eligen en «Tipo de mensaje»)
+MENSAJES = {
+    "stock": ("Volvió {producto} a Topwool 🧶",
+              "Hola {nombre}:\n\nTe avisamos porque ya compraste {producto}: ¡volvió a estar disponible en topwool.cl!\n\n"
+              "Las reposiciones se agotan rápido, así que si lo necesitas para tu próximo proyecto, este es el momento.\n\n"
+              "Equipo Topwool\nwww.topwool.cl"),
+    "nuevo": ("Nuevo en Topwool: …",
+              "Hola {nombre}:\n\nComo te gustan nuestras lanas, quisimos contarte primero: llegó … a topwool.cl.\n\n"
+              "…\n\nEquipo Topwool\nwww.topwool.cl"),
+    "promo": ("{nombre}, esta semana {descuento} en Topwool",
+              "Hola {nombre}:\n\nHasta el {vence} tienes {descuento} de descuento en topwool.cl con el código {cupon}.\n\n"
+              "Equipo Topwool\nwww.topwool.cl"),
+}
+MENSAJES_NOMBRE = {"": "Según el grupo", "stock": "Aviso de llegada de stock", "nuevo": "Producto nuevo", "promo": "Promoción"}
+
+
 class NoContactar(db.Base):
     __tablename__ = "gestor_no_contactar"
     email = Column(String(200), primary_key=True)
@@ -140,7 +156,7 @@ def clientes(s, hoy: date | None = None, dias_dormido=180):
             "ultimo_anio": sum(p.total for p in ps if p.fecha >= hace_un_anio),
             "favorito": (repetidos or prod.most_common(1) or [("", 0)])[0][0],
             "veces": (repetidos or prod.most_common(1) or [("", 0)])[0][1],
-            "repetidos": repetidos[:5], "familias": Counter(inf.familia(n) for n in prod).most_common(3),
+            "repetidos": repetidos[:5], "productos": [n for n, _ in prod.most_common()], "familias": Counter(inf.familia(n) for n in prod).most_common(3),
             "pedidos": [(p.fecha, p.numero, p.total) for p in reversed(ps)],
             "no_contactar": k in no,
             "dormido": dias > dias_dormido,
@@ -166,18 +182,23 @@ def contactos(s):
 
 
 def segmento(lista, seg, filtro=""):
-    f = cb.norm(filtro)
+    palabras = cb.norm(filtro).split()
+
+    def calza(t):   # todas las palabras del filtro, en cualquier orden ("malal rojo" ↔ "Malal Teñido - Rojo")
+        t = cb.norm(t)
+        return bool(palabras) and all(w in t for w in palabras)
     pasa = {
         "mejores": lambda c: c["mejor"], "dormidos": lambda c: c["dormido"], "en_riesgo": lambda c: c["en_riesgo"],
         "repiten": lambda c: bool(c.get("repetidos")), "nuevos": lambda c: c.get("nuevo"),
     }.get(seg, lambda c: True)
     out = [c for c in lista if pasa(c)]
-    if f:   # clientes que compraron un producto que contiene el texto (ej: "malal", "merino socks")
-        out = [c for c in out if any(f in cb.norm(n) for n, _ in c.get("repetidos") or [])
-               or f in cb.norm(c.get("favorito")) or f in cb.norm(c.get("tipo") or "") or f in cb.norm(c.get("ciudad") or "")]
+    if palabras:   # clientes que compraron un producto con esas palabras (o de ese tipo/ciudad)
+        out = [c for c in out if any(calza(n) for n in c.get("productos") or [])
+               or calza(c.get("tipo") or "") or calza(c.get("ciudad") or "")]
         nuevos = []
         for c in out:   # que {producto} y {veces} sean los del producto filtrado
-            hit = next(((n, v) for n, v in c.get("repetidos") or [] if f in cb.norm(n)), None)
+            hit = next(((n, v) for n, v in c.get("repetidos") or [] if calza(n)), None) or \
+                next(((n, 1) for n in c.get("productos") or [] if calza(n)), None)
             nuevos.append({**c, "producto_campana": hit[0], "veces": hit[1]} if hit else c)
         out = nuevos
     return out
@@ -270,8 +291,8 @@ def enviar(destinos, camp, base_url, avance=None, pausa=1.5):
         for i, c in enumerate(destinos, 1):
             try:
                 if smtp is None:
-                    smtp = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=30)
-                    smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+                    from produccion import smtp_abrir
+                    smtp = smtp_abrir()
                 smtp.send_message(armar_correo(c, camp, base_url))
                 res.append((c["email"], True, ""))
             except smtplib.SMTPServerDisconnected as e:
@@ -310,7 +331,8 @@ class Fondo(db.Base):
     cierra = Column(Date, index=True)
     url = Column(String(400))
     nota = Column(Text)
-    estado = Column(String(20), default="vigente")   # vigente | avisado | cerrado
+    estado = Column(String(20), default="vigente")   # por_revisar | vigente | descartado
+    origen = Column(String(80))
     creado = Column(DateTime, default=datetime.now)
 
 

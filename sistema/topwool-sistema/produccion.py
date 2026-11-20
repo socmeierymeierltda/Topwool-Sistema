@@ -142,12 +142,23 @@ def pdf(filas, titulo, tamano=14) -> bytes:
     return buf.getvalue()
 
 
+def smtp_abrir():
+    """Conexión al correo de envío: puerto 465 (SSL, Gmail) o 587 (STARTTLS, hosting/Outlook)."""
+    if config.SMTP_PORT == 587:
+        smtp = smtplib.SMTP(config.SMTP_HOST, 587, timeout=30)
+        smtp.starttls()
+    else:
+        smtp = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=30)
+    smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+    return smtp
+
+
 def enviar_correo(destino, asunto, cuerpo, adjuntos):
     """adjuntos: lista de (nombre, bytes)."""
     if not (config.SMTP_USER and config.SMTP_PASSWORD):
         raise RuntimeError("falta configurar el correo (SMTP_USER y SMTP_PASSWORD en Render)")
     msg = EmailMessage()
-    msg["From"] = config.SMTP_USER
+    msg["From"] = f"Topwool <{config.SMTP_USER}>"
     msg["To"] = destino
     msg["Subject"] = asunto
     msg.set_content(cuerpo)
@@ -157,8 +168,7 @@ def enviar_correo(destino, asunto, cuerpo, adjuntos):
         else:
             msg.add_attachment(datos, maintype="application",
                                subtype="vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename=nombre)
-    with smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=30) as smtp:
-        smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+    with smtp_abrir() as smtp:
         smtp.send_message(msg)
 
 

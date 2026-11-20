@@ -5,21 +5,23 @@
 {% if not smtp %}<div class="msg err">Falta configurar el correo de envío (SMTP_USER y SMTP_PASSWORD en Render → Environment). Sin eso no se puede enviar.</div>{% endif %}
 
 <form method="get" class="filtros">
+  <select name="tipo" style="width:auto" title="Tipo de mensaje">{% for k, n in tipos.items() %}<option value="{{ k }}" {{ 'selected' if tipo==k }}>{{ n }}</option>{% endfor %}</select>
   <select name="seg" style="width:auto">{% for k, n in segmentos.items() %}<option value="{{ k }}" {{ 'selected' if seg==k }}>{{ n }}</option>{% endfor %}</select>
-  <input name="filtro" value="{{ filtro }}" placeholder="Solo quienes compran… (ej: malal, merino socks)" style="max-width:300px">
-  <button class="sec">Cambiar grupo</button>
+  <input name="filtro" value="{{ filtro }}" placeholder="Solo quienes compraron… (ej: malal rojo, merino socks)" style="max-width:300px">
+  <button class="sec">Cambiar</button>
   <span class="sub" style="margin:0"><b>{{ n }}</b> destinatarios con correo{% if recientes %} · {{ recientes }} ya recibieron una campaña en los últimos 14 días{% endif %}</span>
 </form>
 
 <form method="post" action="/gestor/campana" class="tarjeta" onsubmit="if(!event.submitter||event.submitter.name!=='prueba'){return confirm('¿Enviar la campaña a {{ n }} clientes?')}">
   <input type="hidden" name="seg" value="{{ seg }}"><input type="hidden" name="filtro" value="{{ filtro }}">
+  {% if tipo == 'stock' and not filtro %}<div class="msg demo" style="margin-top:0">Para avisar llegada de stock, escribe arriba el producto (ej: «malal rojo») y elige «Todos los clientes web»: se avisa a todos los que lo han comprado.</div>{% endif %}
   <div class="grilla">
     <div class="campo c6"><label>Nombre de la campaña (para ti)</label><input name="nombre" value="{{ segmentos[seg] }} {{ filtro }} – {{ '%02d'|format(campanas|length + 1) }}"></div>
     <div class="campo c6"><label>Responder a</label><input value="{{ aj.gestor_responder_a }}" disabled title="Se cambia en Mercado Público → Ajustes"></div>
     <div class="campo c12"><label>Asunto</label><input name="asunto" value="{{ asunto }}" required></div>
     <div class="campo c12"><label>Mensaje</label><textarea name="cuerpo" rows="11" required>{{ cuerpo }}</textarea>
       <span class="sub" style="font-size:12px">Puedes usar: {nombre} {compras} {total} {producto} {veces} {dias} {cada} {ultima} {cupon} {descuento} {vence}</span></div>
-    <div class="campo c4"><label><input type="checkbox" name="cupon" value="1" style="width:auto" {{ 'checked' if seg in ('mejores','dormidos','en_riesgo','repiten','nuevos') }}> Crear cupón en la web</label>
+    <div class="campo c4"><label><input type="checkbox" name="cupon" value="1" style="width:auto" {{ 'checked' if tipo == 'promo' or (not tipo and seg in ('mejores','dormidos','en_riesgo','repiten','nuevos')) }}> Crear cupón en la web</label>
       <span class="sub" style="font-size:12px">Un código de un solo uso, válido solo para estos correos.</span></div>
     <div class="campo c4"><label>Descuento (%)</label><input type="number" name="porcentaje" value="{{ 15 if seg=='mejores' else 10 }}" min="1" max="60"></div>
     <div class="campo c4"><label>Días de vigencia</label><input type="number" name="dias" value="15" min="1" max="120"></div>
