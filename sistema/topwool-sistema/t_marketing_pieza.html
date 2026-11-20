@@ -1,0 +1,28 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% set pest = 'calendario' %}{% include "t_marketing_nav.html" %}
+<p><a href="/marketing/calendario?mes={{ p.fecha.strftime('%Y-%m') }}">← Volver al calendario</a></p>
+<form method="post" action="/marketing/pieza" class="tarjeta">
+  <input type="hidden" name="pid" value="{{ p.id or 0 }}">
+  <div class="grilla">
+    <div class="campo c3"><label>Fecha</label><input type="date" name="fecha" value="{{ p.fecha.isoformat() }}" required></div>
+    <div class="campo c3"><label>Canal</label><select name="canal">{% for c in canales %}<option {{ 'selected' if p.canal==c }}>{{ c }}</option>{% endfor %}</select></div>
+    <div class="campo c3"><label>Formato</label><input name="formato" value="{{ p.formato or '' }}" list="formatos"><datalist id="formatos">{% for f in formatos %}<option>{{ f }}</option>{% endfor %}</datalist></div>
+    <div class="campo c3"><label>Estado</label><select name="estado">{% for e in estados %}<option {{ 'selected' if p.estado==e }}>{{ e }}</option>{% endfor %}</select></div>
+    <div class="campo c6"><label>Título (para ti)</label><input name="titulo" value="{{ p.titulo or '' }}"></div>
+    <div class="campo c3"><label>Producto</label><input name="producto" value="{{ p.producto or '' }}"></div>
+    <div class="campo c3"><label>Campaña</label><input name="campana" value="{{ p.campana or '' }}" list="evs"><datalist id="evs">{% for e in evs %}<option>{{ e.nombre }}</option>{% endfor %}</datalist></div>
+    <div class="campo c6"><label>Texto de la publicación</label><textarea name="copy" rows="12">{{ p.copy or '' }}</textarea></div>
+    <div class="campo c6"><label>Foto o video: paso a paso</label><textarea name="guia" rows="12">{{ p.guia or '' }}</textarea></div>
+    <div class="campo c6"><label>Llamado a la acción / enlace</label><input name="cta" value="{{ p.cta or '' }}"></div>
+    <div class="campo c6"><label>Cupón (si lleva)</label><input name="cupon" value="{{ p.cupon or '' }}" placeholder="Créalo en Gestor web → Cupones"></div>
+    <div class="campo c12"><label>Enlace con seguimiento (para medir cuánto vende esta pieza)</label>
+      <input value="{{ link }}" readonly onclick="this.select()" style="font-size:13px"><span class="sub" style="font-size:12px">Úsalo en la bio, historias o anuncios: así Google Analytics y WooCommerce muestran de dónde vino la venta.</span></div>
+    <div class="campo c12"><label>Resultado (alcance, guardados, ventas, aprendizajes)</label><textarea name="resultado" rows="3">{{ p.resultado or '' }}</textarea></div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button class="verde">Guardar</button>
+    {% if p.id %}<button class="sec" name="borrar" value="1" formnovalidate onclick="return confirm('¿Borrar esta pieza?')">Borrar</button>{% endif %}
+  </div>
+</form>
+{% endblock %}

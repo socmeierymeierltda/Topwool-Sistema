@@ -29,6 +29,7 @@
     <a href="/cobranza" class="{{ 'activo' if seccion in ('cobranza','documento','meses') }}">Cobranza</a>
     <a href="/conciliacion" class="{{ 'activo' if seccion=='conciliacion' }}">Conciliación</a>
     <a href="/informes" class="{{ 'activo' if seccion=='informes' }}">Informes</a>
+    <a href="/marketing" class="{{ 'activo' if seccion.startswith('marketing') }}">Marketing</a>
     <a href="/gestor" class="{{ 'activo' if seccion.startswith('gestor') }}">Gestor web</a>
     <a href="/ajustes" class="{{ 'activo' if seccion=='ajustes' }}">Ajustes</a>
   </nav>

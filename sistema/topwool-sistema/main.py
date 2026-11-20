@@ -20,6 +20,8 @@ import conciliacion  # noqa: F401
 import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
 import rutas_gestor
+import rutas_marketing
+import marketing  # noqa: F401
 import gestor  # noqa: F401
 import mercadopublico  # noqa: F401
 
@@ -524,6 +526,8 @@ rutas_cobranza._ui.update(render=render, volver=volver)
 app.include_router(rutas_cobranza.router)
 rutas_gestor._ui.update(render=render, volver=volver)
 app.include_router(rutas_gestor.router)
+rutas_marketing._ui.update(render=render, volver=volver)
+app.include_router(rutas_marketing.router)
 
 
 # ---------- ajustes ----------

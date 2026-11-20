@@ -1,0 +1,77 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% set pest = 'panel' %}{% include "t_marketing_nav.html" %}
+
+{% if not pm.hay_datos %}<div class="msg demo">Para ver la meta y las recomendaciones con tus números, ve a <a href="/informes">Informes</a> y aprieta «Actualizar datos».</div>{% endif %}
+
+<div class="tarjeta">
+  <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <div><span class="sub" style="margin:0">Ventas web de {{ pm.mes_nombre }} (al {{ hoy.strftime('%d-%m') }})</span>
+      <div style="font-size:34px;font-weight:800;line-height:1.1">{{ pm.total|clp }} <span style="font-size:16px;font-weight:600;color:var(--suave)">de {{ pm.meta|clp }}</span></div></div>
+    <form method="post" action="/marketing/meta" style="display:flex;gap:6px;align-items:center">
+      <label class="sub" style="margin:0">Meta mensual</label><input name="marketing_meta" value="{{ '{:,.0f}'.format(pm.meta).replace(',', '.') }}" style="width:140px"><button class="sec chico">Guardar</button>
+    </form>
+  </div>
+  {% set pc = [pm.pct, 100]|min %}{% set pp = [pm.pct_proy, 100]|min %}
+  <div style="position:relative;height:16px;background:var(--linea);border-radius:99px;margin:14px 0 6px;overflow:hidden" title="Avance y proyección">
+    <div style="position:absolute;inset:0 auto 0 0;width:{{ pp }}%;background:var(--amarillo-bg);border-right:2px dashed var(--amarillo)"></div>
+    <div style="position:absolute;inset:0 auto 0 0;width:{{ pc }}%;background:{{ 'var(--verde)' if pm.pct_proy >= 100 else 'var(--acento)' }};border-radius:99px"></div>
+  </div>
+  <div class="sub" style="margin:0;font-size:13px">{{ '%.0f'|format(pm.pct) }} % logrado · al ritmo actual cierras en <b>{{ pm.proyeccion|clp }}</b> ({{ '%.0f'|format(pm.pct_proy) }} %, línea punteada)</div>
+  <div class="grilla" style="margin-top:14px">
+    <div class="c3"><span class="sub" style="margin:0">Falta</span><div style="font-size:22px;font-weight:800;color:{{ 'var(--verde)' if not pm.falta else 'var(--rojo)' }}">{{ pm.falta|clp if pm.falta else '¡Meta lograda!' }}</div></div>
+    <div class="c3"><span class="sub" style="margin:0">Por día ({{ pm.dias_quedan }} días)</span><div style="font-size:22px;font-weight:800">{{ pm.por_dia|clp }}</div></div>
+    <div class="c3"><span class="sub" style="margin:0">Pedidos que faltan</span><div style="font-size:22px;font-weight:800">{{ pm.pedidos_faltan }}</div><span class="sub" style="margin:0;font-size:12px">ticket promedio {{ pm.ticket|clp }}</span></div>
+    <div class="c3"><span class="sub" style="margin:0">{{ pm.mes_nombre|capitalize }} del año pasado</span><div style="font-size:22px;font-weight:800">{{ pm.anio_pasado|clp }}</div><span class="sub" style="margin:0;font-size:12px">promedio 12 meses {{ pm.prom12|clp }}</span></div>
+  </div>
+  {% if pm.historial %}<div style="height:180px;margin-top:14px"><canvas id="gHist"></canvas></div>{% endif %}
+</div>
+
+<div class="grilla">
+<div class="tarjeta c6">
+  <b>Qué hacer para vender más</b>
+  {% for t, d, u in recs %}
+  <div style="border-top:1px solid var(--linea);padding:10px 0 2px;margin-top:8px">
+    <b style="font-size:14px">{{ t }}</b><p style="margin:3px 0 0;font-size:14px">{{ d }}</p>
+    {% if u %}<a class="boton sec chico" style="margin-top:6px" href="{{ u }}">Hacerlo →</a>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+<div class="c6">
+  <div class="tarjeta">
+    <b>Próximas fechas</b> <a class="sub" href="/marketing/calendario" style="font-size:13px">ver calendario →</a>
+    <table style="margin-top:6px">
+    {% for e in prox[:14] %}<tr><td style="white-space:nowrap;font-size:13px">{{ e.fecha.strftime('%d-%m') }}{% if e.hasta %}–{{ e.hasta.strftime('%d-%m') }}{% endif %}<br><span class="sub" style="font-size:11px">en {{ (e.fecha - hoy).days if e.fecha >= hoy else 0 }} días</span></td>
+      <td><span class="chip {{ {'comercial':'flow','feriado':'otro','temporada':'transferencia'}.get(e.tipo, '') }}">{{ e.tipo }}</span> <b style="font-size:14px">{{ e.nombre }}</b>{% if e.por_confirmar %} <span class="sub" style="font-size:11px">(por confirmar)</span>{% endif %}<br><span class="sub" style="font-size:12px">{{ e.nota }}</span></td></tr>{% endfor %}
+    </table>
+  </div>
+  <div class="tarjeta">
+    <b>Esta semana</b> <span class="sub" style="font-size:13px">{{ semana|length }} piezas</span>
+    {% for p in semana %}<div style="font-size:14px;margin-top:6px">{{ dias[p.fecha.weekday()][:3] }} {{ p.fecha.strftime('%d') }} · <span class="chip">{{ p.canal }}</span> <a href="/marketing/pieza?pid={{ p.id }}">{{ p.titulo }}</a> <span class="sub" style="font-size:12px">{{ p.estado }}</span></div>{% else %}<p class="sub">Aún no hay grilla para esta semana. <a href="/marketing/calendario">Ármala en el calendario →</a></p>{% endfor %}
+  </div>
+  {% if idx %}<div class="tarjeta"><b>Temporada: cuánto vende cada mes</b> <span class="sub" style="font-size:12px">(100 = mes promedio)</span>
+    <div style="display:flex;gap:4px;align-items:flex-end;height:90px;margin-top:10px">
+    {% for mm in range(1, 13) %}{% set v = (idx.get(mm, 0) * 100)|round|int %}
+      <div style="flex:1;text-align:center" title="{{ meses[mm-1] }}: {{ v }}{% if prod_mes.get(mm) %} · {{ prod_mes[mm]|join(', ') }}{% endif %}">
+        <div style="height:{{ [v * 0.45, 2]|max }}px;background:{{ 'var(--acento)' if mm == hoy.month else 'var(--cafe2)' }};border-radius:4px 4px 0 0;opacity:{{ 1 if mm == hoy.month else 0.55 }}"></div>
+        <span style="font-size:11px;color:var(--suave)">{{ meses[mm-1][:3] }}</span></div>{% endfor %}
+    </div></div>{% endif %}
+</div>
+</div>
+
+{% if pm.historial %}
+<script src="/static/chart.umd.js"></script>
+<script>
+(function(){ if(!window.Chart) return;
+  const css=getComputedStyle(document.documentElement), c=css.getPropertyValue('--cafe2').trim(), a=css.getPropertyValue('--acento').trim(),
+        t=css.getPropertyValue('--suave').trim(), l=css.getPropertyValue('--linea').trim(), meta={{ pm.meta|int }};
+  const h={{ pm.historial|tojson }};
+  new Chart(document.getElementById('gHist'),{type:'bar',data:{labels:h.map(x=>x[0]),datasets:[{data:h.map(x=>x[1]),
+    backgroundColor:h.map(x=>x[1]>=meta?a:c),borderRadius:4,maxBarThickness:34}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:x=>'$'+Math.round(x.parsed.y).toLocaleString('es-CL')}}},
+    scales:{x:{grid:{display:false},ticks:{color:t}},y:{grid:{color:l},border:{display:false},ticks:{color:t,callback:v=>v>=1e6?'$'+(v/1e6).toLocaleString('es-CL',{maximumFractionDigits:1})+'M':'$'+Math.round(v/1e3)+'k'}}}}});
+})();
+</script>
+<p class="sub" style="font-size:12px">Ventas web por mes; en color acento los meses que llegaron a la meta actual.</p>
+{% endif %}
+{% endblock %}
