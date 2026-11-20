@@ -24,6 +24,18 @@
     <div class="c3"><span class="sub" style="margin:0">Pedidos que faltan</span><div style="font-size:22px;font-weight:800">{{ pm.pedidos_faltan }}</div><span class="sub" style="margin:0;font-size:12px">ticket promedio {{ pm.ticket|clp }}</span></div>
     <div class="c3"><span class="sub" style="margin:0">{{ pm.mes_nombre|capitalize }} del año pasado</span><div style="font-size:22px;font-weight:800">{{ pm.anio_pasado|clp }}</div><span class="sub" style="margin:0;font-size:12px">promedio 12 meses {{ pm.prom12|clp }}</span></div>
   </div>
+  {% if emp.hay %}
+  <div style="border-top:1px solid var(--linea);margin-top:14px;padding-top:12px">
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div><span class="sub" style="margin:0">Ventas totales de la empresa en {{ pm.mes_nombre }} (documentos en Cobranza)</span>
+        <div style="font-size:26px;font-weight:800">{{ emp.total|clp }}{% if meta_total %} <span style="font-size:15px;font-weight:600;color:var(--suave)">de {{ meta_total|clp }} ({{ '%.0f'|format(100*emp.total/meta_total) }} %)</span>{% endif %}</div>
+        <span class="sub" style="margin:0;font-size:13px">{% for k in ['mayoristas','web','mesón'] %}{{ k|capitalize }} {{ emp.canales.get(k, 0)|clp }}{% if emp.total %} ({{ '%.0f'|format(100*emp.canales.get(k, 0)/emp.total) }} %){% endif %}{{ ' · ' if not loop.last }}{% endfor %} · mismo mes año pasado {{ emp.anio_pasado|clp }}</span></div>
+      <form method="post" action="/marketing/meta" style="display:flex;gap:6px;align-items:center">
+        <label class="sub" style="margin:0">Meta total empresa</label><input name="marketing_meta_total" value="{{ '{:,.0f}'.format(meta_total).replace(',', '.') if meta_total }}" placeholder="opcional" style="width:140px"><button class="sec chico">Guardar</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
   {% if pm.historial %}<div style="height:180px;margin-top:14px"><canvas id="gHist"></canvas></div>{% endif %}
 </div>
 
@@ -59,6 +71,21 @@
 </div>
 </div>
 
+{% if may %}
+<div class="tarjeta" id="mayoristas">
+  <b>Mayoristas a contactar</b> <span class="sub" style="font-size:13px">— {{ may_atras }} de {{ may_n }} clientes de venta directa ya pasaron su ritmo habitual de compra (según Cobranza)</span>
+  <div class="tabla-scroll" style="margin-top:8px"><table>
+  <tr><th>Cliente</th><th>Última compra</th><th>Compra cada</th><th class="n">Últimos 12 meses</th><th>Vendedor</th><th></th></tr>
+  {% for x in may %}
+  <tr><td><b>{{ x.cliente }}</b>{% if x.atrasado %} <span class="chip transferencia">le toca</span>{% endif %}</td>
+  <td style="white-space:nowrap">{{ x.ultima.strftime('%d-%m-%Y') }}<br><span class="sub" style="font-size:12px">hace {{ x.dias }} días</span></td>
+  <td>{{ (x.cada ~ ' días') if x.cada else '—' }}</td><td class="n">{{ x.total12|clp }}</td><td>{{ x.vendedor }}</td>
+  <td>{% if x.whatsapp %}<a class="boton verde chico" target="_blank" href="{{ x.whatsapp }}">WhatsApp</a>{% else %}<span class="sub" style="font-size:12px">sin teléfono</span>{% endif %}</td></tr>
+  {% endfor %}
+  </table></div>
+  <p class="sub" style="font-size:12px;margin:6px 0 0">El teléfono sale de la lista de contactos que subes en Gestor web → Clientes (columna teléfono). A medida que juntes correos y teléfonos de mayoristas, súbelos ahí.</p>
+</div>
+{% endif %}
 {% if pm.historial %}
 <script src="/static/chart.umd.js"></script>
 <script>

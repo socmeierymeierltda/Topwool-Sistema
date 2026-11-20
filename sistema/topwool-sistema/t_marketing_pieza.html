@@ -9,15 +9,17 @@
     <div class="campo c3"><label>Canal</label><select name="canal">{% for c in canales %}<option {{ 'selected' if p.canal==c }}>{{ c }}</option>{% endfor %}</select></div>
     <div class="campo c3"><label>Formato</label><input name="formato" value="{{ p.formato or '' }}" list="formatos"><datalist id="formatos">{% for f in formatos %}<option>{{ f }}</option>{% endfor %}</datalist></div>
     <div class="campo c3"><label>Estado</label><select name="estado">{% for e in estados %}<option {{ 'selected' if p.estado==e }}>{{ e }}</option>{% endfor %}</select></div>
-    <div class="campo c6"><label>Título (para ti)</label><input name="titulo" value="{{ p.titulo or '' }}"></div>
+    <div class="campo c3"><label>Público</label><select name="publico">{% for x in publicos %}<option {{ 'selected' if (p.publico or 'Todos')==x }}>{{ x }}</option>{% endfor %}</select></div>
+    <div class="campo c3"><label>Título (para ti)</label><input name="titulo" value="{{ p.titulo or '' }}"></div>
     <div class="campo c3"><label>Producto</label><input name="producto" value="{{ p.producto or '' }}"></div>
-    <div class="campo c3"><label>Campaña</label><input name="campana" value="{{ p.campana or '' }}" list="evs"><datalist id="evs">{% for e in evs %}<option>{{ e.nombre }}</option>{% endfor %}</datalist></div>
-    <div class="campo c6"><label>Texto de la publicación</label><textarea name="copy" rows="12">{{ p.copy or '' }}</textarea></div>
+    <div class="campo c6"><label>Campaña</label><input name="campana" value="{{ p.campana or '' }}" list="evs"><datalist id="evs">{% for e in evs %}<option>{{ e.nombre }}</option>{% endfor %}</datalist></div>
+    <div class="campo c6"><label>Texto de la publicación</label><textarea name="texto" rows="12">{{ p.copy or '' }}</textarea></div>
     <div class="campo c6"><label>Foto o video: paso a paso</label><textarea name="guia" rows="12">{{ p.guia or '' }}</textarea></div>
     <div class="campo c6"><label>Llamado a la acción / enlace</label><input name="cta" value="{{ p.cta or '' }}"></div>
     <div class="campo c6"><label>Cupón (si lleva)</label><input name="cupon" value="{{ p.cupon or '' }}" placeholder="Créalo en Gestor web → Cupones"></div>
     <div class="campo c12"><label>Enlace con seguimiento (para medir cuánto vende esta pieza)</label>
       <input value="{{ link }}" readonly onclick="this.select()" style="font-size:13px"><span class="sub" style="font-size:12px">Úsalo en la bio, historias o anuncios: así Google Analytics y WooCommerce muestran de dónde vino la venta.</span></div>
+    {% if p.canal == 'WhatsApp' %}<div class="campo c12"><span class="sub" style="font-size:13px">Para enviarlo a cada mayorista con un clic: Gestor web → Campañas → grupo «Lista subida» (aparecen botones de WhatsApp con este texto). Para todos de una vez, usa una lista de difusión en WhatsApp Business.</span></div>{% endif %}
     <div class="campo c12"><label>Resultado (alcance, guardados, ventas, aprendizajes)</label><textarea name="resultado" rows="3">{{ p.resultado or '' }}</textarea></div>
   </div>
   <div style="display:flex;gap:8px;margin-top:10px">

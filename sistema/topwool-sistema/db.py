@@ -60,7 +60,8 @@ def init():
               ("documentos", "despachado", "TIMESTAMP"),
               ("envios_produccion", "pdf", "BYTEA" if pg else "BLOB"),
               ("seguimiento_filas", "despachado", "TIMESTAMP"),
-              ("gestor_fondos", "origen", "VARCHAR(80)")]
+              ("gestor_fondos", "origen", "VARCHAR(80)"),
+              ("mk_piezas", "publico", "VARCHAR(30)")]
     for tabla, col, tipo in nuevas:
         sql = f"ALTER TABLE {tabla} ADD COLUMN {'IF NOT EXISTS ' if pg else ''}{col} {tipo}"
         try:

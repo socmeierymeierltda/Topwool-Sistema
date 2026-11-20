@@ -87,7 +87,8 @@ DEFAULTS = {
     "inv_auto": "",
     # Marketing
     "marketing_meta": "10000000",
-    "marketing_ritmo": "lun=Carrusel de producto, mar=Historias, mie=Reel, jue=Historias, vie=Carrusel de producto, sab=Reel, dom=Comunidad, jue=Correo",
+    "marketing_meta_total": "",
+    "marketing_ritmo": "lun=Carrusel de producto, mar=Historias, mie=Reel, jue=Historias, vie=Carrusel de producto, sab=Reel, dom=Comunidad, jue=Correo, mar=WhatsApp mayoristas, vie=Instagram mayoristas",
     "marketing_productos": "",
     # Gestor web
     "gestor_dias_dormido": "180",

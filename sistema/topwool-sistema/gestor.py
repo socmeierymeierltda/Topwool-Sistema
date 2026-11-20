@@ -176,7 +176,9 @@ def clientes(s, hoy: date | None = None, dias_dormido=180):
 
 def contactos(s):
     no = {e for (e,) in s.execute(select(NoContactar.email))}
-    return [{"clave": c.email, "email": c.email, "nombre": c.nombre or c.email, "ciudad": c.comuna, "tipo": c.tipo,
+    return [{"clave": c.email, "email": "" if c.email.startswith("tel:") else c.email,
+             "nombre": c.nombre or c.telefono or c.email, "ciudad": c.comuna, "tipo": c.tipo,
+             "telefono": c.telefono,
              "compras": 0, "total": 0, "favorito": "", "veces": 0, "dias": None, "cada": None, "ultima": None,
              "no_contactar": c.email in no} for c in s.scalars(select(Contacto).order_by(Contacto.nombre))]
 
@@ -224,17 +226,26 @@ def importar_contactos(s, contenido: bytes, nombre: str, tipo_def: str) -> int:
             cab_i, cab = i, celdas
             break
     if not cab:
-        raise ValueError("No encontré una columna 'correo' o 'email' en el archivo.")
+        for i, r in enumerate(filas[:15]):
+            celdas = [cb.norm(_txt(c)) for c in r]
+            if any("fono" in c or "telef" in c or "celular" in c or "whatsapp" in c for c in celdas):
+                cab_i, cab = i, celdas
+                break
+    if not cab:
+        raise ValueError("No encontré una columna 'correo', 'email' o 'teléfono' en el archivo.")
 
     def col(*p):
         return next((j for j, c in enumerate(cab) if any(x in c for x in p)), None)
-    ie, inn, it, itel, ico = col("mail", "correo"), col("nombre", "cliente", "razon"), col("tipo", "segmento"), col("fono", "telef", "celular"), col("comuna", "ciudad")
+    ie, inn, it, itel, ico = col("mail", "correo"), col("nombre", "cliente", "razon"), col("tipo", "segmento"), col("fono", "telef", "celular", "whatsapp"), col("comuna", "ciudad")
     n = 0
     for r in filas[cab_i + 1:]:
         g = lambda j: _txt(r[j]) if j is not None and j < len(r) else ""   # noqa: E731
         email = g(ie).lower().strip()
         if not re.match(r"[^@\s]+@[^@\s]+\.[a-z]{2,}$", email):
-            continue
+            tel = re.sub(r"\D", "", g(itel))
+            if len(tel) < 8:
+                continue
+            email = "tel:" + tel[-9:]     # contacto solo con WhatsApp
         s.merge(Contacto(email=email[:200], nombre=g(inn)[:200], tipo=(g(it) or tipo_def)[:60],
                          telefono=g(itel)[:40], comuna=g(ico)[:120]))
         n += 1

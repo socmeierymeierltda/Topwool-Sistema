@@ -171,10 +171,14 @@ def nueva_campana(request: Request, seg: str = "mejores", filtro: str = "", fond
     muestra = lista[:3]
     camp_demo = {"cupon": "TW1126-AB12", "descuento_txt": "10 %", "vence": date.today() + timedelta(days=15)}
     previas = [(c, g.rellenar(asunto, c, camp_demo), g.rellenar(cuerpo, c, camp_demo)) for c in muestra]
+    import marketing as mk
+    wsp = [(c, mk.whatsapp(c.get("telefono"), g.rellenar(cuerpo, c, {**camp_demo, "cupon": "", "descuento_txt": ""})))
+           for c in g.segmento(_lista(s, seg, aj), seg, filtro) if c.get("telefono") and not c["no_contactar"]] \
+        if seg == "contactos" else []
     return _render(request, "gestor_campana.html", seg=seg, filtro=filtro, asunto=asunto, cuerpo=cuerpo, n=len(lista),
                    recientes=sum(1 for c in lista if c["email"] in ya_enviados), previas=previas, campanas=campanas,
                    segmentos=g.SEGMENTOS, plantillas=g.PLANTILLAS, aj=aj, fondo=fondo, pest="campanas",
-                   tipo=tipo, tipos=g.MENSAJES_NOMBRE, prods=_catalogo()[0], cats=_catalogo()[1],
+                   tipo=tipo, tipos=g.MENSAJES_NOMBRE, wsp=wsp, prods=_catalogo()[0], cats=_catalogo()[1],
                    smtp=bool(config.SMTP_USER and config.SMTP_PASSWORD), trabajo=TRABAJO, smtp_user=config.SMTP_USER)
 
 

@@ -16,6 +16,7 @@ MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 CANALES = ["Instagram", "Reel", "Historias", "Facebook", "Meta Ads", "Correo", "Web", "WhatsApp", "TikTok"]
 ESTADOS = ["idea", "en preparación", "listo", "publicado"]
+PUBLICOS = ["Todos", "Clientes web", "Mayoristas"]
 
 
 class Evento(db.Base):
@@ -36,6 +37,7 @@ class Pieza(db.Base):
     id = Column(Integer, primary_key=True)
     fecha = Column(Date, index=True)
     canal = Column(String(30))
+    publico = Column(String(30))       # Todos | Clientes web | Mayoristas
     formato = Column(String(60))
     titulo = Column(String(200))
     producto = Column(String(150))
@@ -167,6 +169,70 @@ def panel_meta(s, meta, hoy=None):
     }
 
 
+def canal_doc(d):
+    """web | mesón | mayoristas (venta directa: tiendas, revendedores, clientes de vendedores)."""
+    c = cb.norm(d.cliente or "")
+    if c.startswith("web") or d.tipo == "cv":
+        return "web"
+    if cb.meson(d.comentario or "") or c.startswith(("vta cura", "venta cura")):
+        return "mesón"
+    return "mayoristas"
+
+
+def ventas_empresa(s, hoy=None):
+    """Ventas del mes según Cobranza (documentos de Defontana), por canal."""
+    hoy = hoy or date.today()
+    ini = hoy.replace(day=1)
+    por, ant = Counter(), Counter()
+    for d in s.scalars(select(cb.Documento).where(cb.Documento.fecha >= date(ini.year - 1, ini.month, 1))):
+        if not d.fecha or (d.tipo or "") == "nc":
+            continue
+        if ini <= d.fecha <= hoy:
+            por[canal_doc(d)] += d.total or 0
+        elif d.fecha.year == hoy.year - 1 and d.fecha.month == hoy.month:
+            ant[canal_doc(d)] += d.total or 0
+    return {"total": sum(por.values()), "canales": por, "anio_pasado": sum(ant.values()), "hay": bool(por or ant)}
+
+
+def mayoristas_a_contactar(s, hoy=None, n=25):
+    """Clientes de venta directa ordenados por urgencia: los que ya pasaron su ritmo habitual de compra."""
+    import gestor as g
+    import seguimiento as sg
+    hoy = hoy or date.today()
+    por = defaultdict(list)
+    for d in s.scalars(select(cb.Documento).where(cb.Documento.fecha >= hoy - timedelta(days=730))):
+        if d.fecha and d.cliente and canal_doc(d) == "mayoristas" and (d.tipo or "") != "nc":
+            por[d.cliente].append(d)
+    contactos = list(s.scalars(select(g.Contacto)))
+    out = []
+    for cliente, docs in por.items():
+        fechas = sorted({d.fecha for d in docs})
+        gaps = [(b - a).days for a, b in zip(fechas, fechas[1:])]
+        cada = round(sum(gaps) / len(gaps)) if gaps else None
+        dias = (hoy - fechas[-1]).days
+        total12 = sum(d.total or 0 for d in docs if d.fecha >= hoy - timedelta(days=365))
+        atrasado = (cada and dias > max(30, cada * 1.4)) or (not cada and 60 < dias < 400)
+        tel = next((c.telefono for c in contactos if c.telefono and sg.parecido(cliente, c.nombre or "") >= 0.8), "")
+        out.append({"cliente": cliente, "ultima": fechas[-1], "dias": dias, "cada": cada, "compras": len(fechas),
+                    "total12": total12, "vendedor": docs[-1].vendedor or "", "atrasado": bool(atrasado),
+                    "whatsapp": whatsapp(tel)})
+    out.sort(key=lambda x: (not x["atrasado"], -x["total12"]))
+    return out[:n], sum(1 for x in out if x["atrasado"]), len(out)
+
+
+def whatsapp(tel, texto=""):
+    import re
+    from urllib.parse import quote
+    n = re.sub(r"\D", "", tel or "")
+    if not n:
+        return ""
+    if len(n) == 9 and n.startswith("9"):
+        n = "56" + n
+    elif len(n) == 8:
+        n = "569" + n
+    return f"https://wa.me/{n}" + (f"?text={quote(texto)}" if texto else "")
+
+
 def estacionalidad(s):
     """Índice por mes (1 = mes promedio) y productos que más se venden cada mes del año."""
     ventas = _ventas(s)
@@ -206,6 +272,11 @@ def recomendaciones(s, pm, aj):
                     f"Faltan {fmt(pm['falta'])} en {pm['dias_quedan']} días: unos {pm['pedidos_faltan']} pedidos "
                     f"(≈ {pm['pedidos_dia']:.1f} al día) con el ticket promedio de {fmt(pm['ticket'])}. "
                     f"Al ritmo actual cerrarías el mes en {fmt(pm['proyeccion'])} ({pm['pct_proy']:.0f} % de la meta).", ""))
+    lista_m, atrasados, n_m = mayoristas_a_contactar(s)
+    if atrasados:
+        out.insert(1 if out else 0, ("Mayoristas que ya deberían haber comprado",
+                    f"{atrasados} de tus {n_m} clientes de venta directa pasaron su ritmo habitual de compra. "
+                    "Escríbeles por WhatsApp con novedades y stock disponible (lista abajo, «Mayoristas a contactar»).", "#mayoristas"))
     if res.get("en_riesgo"):
         out.append(("Reactivar a quienes están por dormirse",
                     f"{res['en_riesgo']} clientas ya pasaron su ritmo habitual de compra. Son las más fáciles de convertir: "
@@ -273,6 +344,19 @@ GUIAS = {
         "5. Presupuesto de prueba: $5.000–$10.000 diarios por 5–7 días; deja el que tenga menor costo por compra."),
     "Correo": ("1. Crea la campaña en Gestor web → Campañas con el grupo indicado.\n"
                "2. Usa como imagen la foto principal del carrusel de la semana."),
+    "WhatsApp mayoristas": (
+        "1. Foto de la estantería o mesa con todos los colores de {producto} que hay en stock (luz natural, de frente).\n"
+        "2. 2–3 fotos de detalle: madejas/ovillos apilados por color, con etiqueta visible.\n"
+        "3. Envíalo por la lista de difusión de mayoristas (no por grupo) desde el WhatsApp Business.\n"
+        "4. Adjunta la lista de precios mayoristas en PDF y súbelo también al estado de WhatsApp."),
+    "Correo mayoristas": (
+        "1. Usa una foto grupal de la línea {producto} (todos los colores, de arriba).\n"
+        "2. Créalo en Gestor web → Campañas con el grupo «Lista subida» (tipo mayorista).\n"
+        "3. Adjunta o enlaza la lista de precios y el catálogo."),
+    "Instagram mayoristas": (
+        "1. Foto de un pedido mayorista armado (cajas o bolsas con madejas, sin datos del cliente).\n"
+        "2. Segunda foto: la bodega o el taller, para mostrar capacidad.\n"
+        "3. Destácalo en las historias destacadas «Mayoristas»."),
     "Banner web": ("1. Foto horizontal (proporción 3:1) con espacio libre a la izquierda para el texto.\n"
                    "2. Texto corto: oferta + fecha límite."),
 }
@@ -287,6 +371,14 @@ COPIES = {
     "Meta Ads": "{producto} — {gancho}. Envíos a todo Chile desde la Araucanía. Compra en topwool.cl",
     "Correo": "Correo a clientas: {gancho}",
     "Banner web": "{gancho}",
+    "WhatsApp mayoristas": "¡Hola! 👋 Les cuento las novedades de Topwool esta semana:\n\n"
+                           "🧶 {producto}: {gancho}. Tenemos stock disponible para despacho inmediato.\n"
+                           "📦 Despachos a todo Chile · factura · condiciones mayoristas.\n\n"
+                           "Respondan este mensaje con lo que necesitan y les cotizamos hoy mismo.",
+    "Correo mayoristas": "Novedades Topwool para tiendas: {producto} — {gancho}.\n\nStock disponible, plazos de "
+                         "producción y lista de precios actualizada. Responde este correo para hacer tu pedido.",
+    "Instagram mayoristas": "¿Tienes una tienda o vendes lana? 🧶 Trabajamos con tiendas de todo Chile: {producto} y "
+                            "toda nuestra línea con precios mayoristas, factura y despacho.\n\nEscríbenos por DM o WhatsApp.",
 }
 
 
@@ -314,8 +406,12 @@ def ritmo(aj):
 
 
 def _canal(formato):
-    return {"Reel": "Reel", "Historias": "Historias", "Meta Ads": "Meta Ads", "Correo": "Correo",
-            "Banner web": "Web"}.get(formato, "Instagram")
+    return {"Reel": "Reel", "Historias": "Historias", "Meta Ads": "Meta Ads", "Correo": "Correo", "Correo mayoristas": "Correo",
+            "WhatsApp mayoristas": "WhatsApp", "Banner web": "Web"}.get(formato, "Instagram")
+
+
+def _publico(formato):
+    return "Mayoristas" if "mayorista" in cb.norm(formato) else ("Clientes web" if formato in ("Correo", "Banner web") else "Todos")
 
 
 def generar_mes(s, anio, mes, aj, reemplazar=False):
@@ -326,18 +422,37 @@ def generar_mes(s, anio, mes, aj, reemplazar=False):
         for p in s.scalars(select(Pieza).where(Pieza.fecha >= ini, Pieza.fecha <= fin, Pieza.generada.is_(True),
                                                Pieza.estado == "idea")):
             s.delete(p)
-    fams = familias(s) or [x.strip() for x in db.lista(aj.get("marketing_productos", ""))] or ["Lana"]
+    import productos as pr
+    matriz = sorted({p for (p,) in s.execute(select(pr.Producto.producto).where(pr.Producto.producto.isnot(None))) if p})
+    fams = ([x.strip() for x in db.lista(aj.get("marketing_productos", ""))] or matriz or familias(s) or ["Lana"])
     # rotación pareja: continúa donde quedó el mes anterior
     usados = Counter(p.producto for p in s.scalars(select(Pieza).where(Pieza.producto.isnot(None))))
     orden = sorted(fams, key=lambda f: (usados.get(f, 0), fams.index(f)))
     i = 0
     eventos = eventos_entre(s, ini, fin + timedelta(days=10))
+    nuevas = 0
+    for e in eventos_entre(s, ini + timedelta(days=30), fin + timedelta(days=35)):
+        clave = cb.norm(e.nombre)
+        if e.tipo in ("comercial", "temporada") and not any(x in clave for x in ("halloween", "verano", "primavera", "black", "cyber")):
+            f = e.fecha - timedelta(days=30)
+            if ini <= f <= fin:
+                for formato, dd in (("WhatsApp mayoristas", 0), ("Correo mayoristas", 1)):
+                    p = _pieza(f + timedelta(days=dd), formato, orden[i % len(orden)], f"prepara tu stock para {e.nombre}", e.nombre)
+                    p.titulo = f"Mayoristas: stock para {e.nombre}"
+                    s.add(p)
+                    nuevas += 1
+                i += 1
+    # novedades mensuales a mayoristas (primer jueves)
+    jueves = ini + timedelta(days=(3 - ini.weekday()) % 7)
+    p = _pieza(jueves, "Correo mayoristas", orden[i % len(orden)], "novedades y stock del mes", "Mayoristas")
+    p.titulo = f"Correo mayoristas – novedades de {MESES[mes - 1]}"
+    s.add(p)
+    nuevas += 1
     ev_dia = {}
     for e in eventos:
         if e.tipo != "feriado":
             ev_dia.setdefault(e.fecha, e)
     r = ritmo(aj)
-    nuevas = 0
     d = ini
     while d <= fin:
         for formato in r.get(d.weekday(), []):
@@ -379,7 +494,7 @@ def generar_mes(s, anio, mes, aj, reemplazar=False):
 def _pieza(d, formato, producto, gancho, campana):
     ctx = {"producto": producto, "gancho": gancho, "uso": _uso(producto), "cta_link": ""}
     base = formato if formato in GUIAS else ("Carrusel de producto" if "carrusel" in cb.norm(formato) else formato)
-    return Pieza(fecha=d, canal=_canal(base), formato=formato, producto=producto, campana=campana,
+    return Pieza(fecha=d, canal=_canal(base), publico=_publico(base), formato=formato, producto=producto, campana=campana,
                  titulo=f"{formato}: {producto}", copy=COPIES.get(base, "{producto}").format(**ctx),
                  guia=GUIAS.get(base, "").format(**ctx), cta="topwool.cl", estado="idea", generada=True)
 

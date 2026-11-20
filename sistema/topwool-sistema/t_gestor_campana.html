@@ -35,6 +35,10 @@
   <p class="sub" style="margin:8px 0 0;font-size:12px">Gmail permite unos 500 correos al día; el sistema envía máximo {{ aj.gestor_max_envios }} por campaña, uno cada segundo y medio. Si se corta, vuelve a enviarla al día siguiente: los ya contactados se saltan.</p>
 </form>
 
+{% if wsp %}
+<div class="tarjeta"><b>Enviar por WhatsApp</b> <span class="sub" style="font-size:13px">— un clic abre WhatsApp con el mensaje escrito para cada contacto (sin cupón). Para enviar a todos de una vez, usa una lista de difusión de WhatsApp Business.</span>
+<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">{% for c, u in wsp %}<a class="boton sec chico" target="_blank" href="{{ u }}">{{ c.nombre }}</a>{% endfor %}</div></div>
+{% endif %}
 {% if previas %}
 <div class="tarjeta"><b>Así lo verán</b> <span class="sub">(cupón y fecha de ejemplo)</span>
 {% for c, a, cu in previas %}
