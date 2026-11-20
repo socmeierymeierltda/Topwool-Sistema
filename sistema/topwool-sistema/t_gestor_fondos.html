@@ -1,0 +1,40 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_gestor_nav.html" %}
+<p class="sub">Convocatorias de fondos públicos que pueden usar artesanas, agrupaciones y emprendedoras para comprar materiales. Cuando abra uno, avísales a tus clientes y ofréceles una cotización formal para su postulación.</p>
+
+{% if vigentes %}
+<div class="tabla-scroll"><table>
+<tr><th>Cierra</th><th>Fondo</th><th>Región</th><th></th></tr>
+{% for f in vigentes %}
+<tr><td style="white-space:nowrap">{% if f.cierra %}<b style="{{ 'color:var(--rojo)' if (f.cierra - hoy).days < 7 }}">{{ f.cierra.strftime('%d-%m-%Y') }}</b><br><span class="sub" style="font-size:12px">en {{ (f.cierra - hoy).days }} días</span>{% else %}—{% endif %}</td>
+<td><b>{{ f.nombre }}</b><br><span class="sub" style="font-size:12px">{{ f.institucion }}{% if f.abre %} · abre {{ f.abre.strftime('%d-%m-%Y') }}{% endif %}</span>{% if f.nota %}<br><span style="font-size:13px">{{ f.nota }}</span>{% endif %}</td>
+<td>{{ f.region or 'Nacional' }}</td>
+<td style="min-width:200px">{% if f.url %}<a class="boton sec chico" target="_blank" href="{{ f.url }}">Bases</a>{% endif %}
+  <a class="boton verde chico" href="/gestor/campana?seg=todos&fondo={{ f.id }}">Avisar a clientes web</a>
+  <a class="boton verde chico" href="/gestor/campana?seg=contactos&fondo={{ f.id }}">Avisar a mayoristas</a>
+  <form method="post" action="/gestor/fondos/{{ f.id }}/borrar" style="display:inline" onsubmit="return confirm('¿Borrar?')"><button class="sec chico">Borrar</button></form></td></tr>
+{% endfor %}
+</table></div>
+{% else %}<div class="vacio">No hay fondos abiertos registrados. Agrégalos abajo cuando te llegue el aviso semanal.</div>{% endif %}
+
+<details class="tarjeta" style="margin-top:16px" {{ 'open' if not vigentes }}>
+<summary><b>Agregar fondo</b></summary>
+<form method="post" action="/gestor/fondos" class="grilla" style="margin-top:10px">
+  <div class="campo c6"><label>Nombre</label><input name="nombre" required placeholder="Capital Semilla Emprende 2027"></div>
+  <div class="campo c3"><label>Institución</label><input name="institucion" list="inst" placeholder="Sercotec"></div>
+  <div class="campo c3"><label>Región</label><input name="region" placeholder="Nacional / Araucanía"></div>
+  <div class="campo c3"><label>Abre</label><input type="date" name="abre"></div>
+  <div class="campo c3"><label>Cierra</label><input type="date" name="cierra"></div>
+  <div class="campo c6"><label>Enlace a las bases</label><input name="url"></div>
+  <div class="campo c12"><label>Nota (para quién sirve, monto, qué financia)</label><input name="nota"></div>
+  <datalist id="inst">{% for i, _, _ in fuentes %}<option>{{ i }}</option>{% endfor %}</datalist>
+  <div class="c12"><button>Guardar</button></div>
+</form>
+</details>
+
+<div class="tarjeta"><b>Dónde se publican</b>
+<table style="margin-top:6px">{% for i, d, u in fuentes %}<tr><td><b>{{ i }}</b></td><td style="font-size:13px">{{ d }}</td><td><a href="{{ u }}" target="_blank">abrir</a></td></tr>{% endfor %}</table>
+</div>
+{% if cerrados %}<p class="sub">Cerrados recientes: {% for f in cerrados %}{{ f.nombre }} ({{ f.cierra.strftime('%d-%m') }}){{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+{% endblock %}

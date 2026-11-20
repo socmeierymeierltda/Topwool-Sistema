@@ -174,3 +174,16 @@ def actualizar_stock(cambios):
             cl.post(f"products/{padre}/variations/batch", json={"update": lote}).raise_for_status()
             n += len(lote)
     return n
+
+
+def crear_cupon(codigo, porcentaje, vence, correos, descripcion=""):
+    """Cupón de % de descuento, de un uso por persona y solo para los correos indicados."""
+    if config.DEMO:
+        return {"code": codigo, "demo": True}
+    datos = {"code": codigo, "discount_type": "percent", "amount": str(porcentaje),
+             "individual_use": True, "usage_limit_per_user": 1, "description": descripcion[:200],
+             "date_expires": vence.isoformat() + "T23:59:59", "email_restrictions": list(correos)}
+    with _client() as c:
+        r = c.post("coupons", json=datos)
+        r.raise_for_status()
+        return r.json()

@@ -1,0 +1,60 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_gestor_nav.html" %}
+<p class="sub">Todas las personas que han comprado en topwool.cl: cuántas veces, cuánto, cada cuánto y qué repiten. Los datos vienen de <a href="/informes">Informes</a>{% if ult %} (actualizados al {{ ult.strftime('%d-%m-%Y %H:%M') }}){% endif %}; para traer lo último aprieta «Actualizar datos» allá.</p>
+
+{% if not ult %}<div class="vacio">Todavía no hay datos de la web. Ve a <a href="/informes">Informes</a> y aprieta «Actualizar datos».</div>{% else %}
+
+<div class="grilla" style="margin-bottom:14px">
+{% for k, n in segmentos.items() %}
+  <a class="tarjeta c3" style="margin:0;text-decoration:none;color:inherit;{{ 'outline:2px solid var(--cafe)' if seg==k }}" href="/gestor?seg={{ k }}">
+    <span class="sub" style="margin:0">{{ n }}</span>
+    <div style="font-size:26px;font-weight:800">{{ res.get(k, 0) }}</div>
+    <span class="sub" style="margin:0;font-size:12px">{{ {'mejores':'10 % que más compró en 12 meses','en_riesgo':'pasó 1,5× su ritmo habitual sin comprar','dormidos':'más de ' ~ dd ~ ' días sin comprar','repiten':'compraron 2+ veces lo mismo','nuevos':'1 compra en los últimos 60 días','contactos':'subidos desde Excel','todos':total_clientes ~ ' clientes · ' ~ con_correo ~ ' con correo'}[k] }}</span>
+  </a>
+{% endfor %}
+</div>
+
+<form class="filtros" method="get">
+  <input type="hidden" name="seg" value="{{ seg }}">
+  <input name="q" value="{{ q }}" placeholder="Nombre, correo, ciudad o producto" style="max-width:260px">
+  <select name="orden" style="width:auto">
+    {% for k, n in [('total','Más compra ($)'),('compras','Más compras (n°)'),('ultima','Compra más reciente'),('dias','Más días sin comprar')] %}<option value="{{ k }}" {{ 'selected' if orden==k }}>{{ n }}</option>{% endfor %}
+  </select>
+  <button class="sec">Ver</button>
+  <a class="boton verde" href="/gestor/campana?seg={{ seg }}&filtro={{ q }}">Crear campaña a estos {{ n }}</a>
+  <a class="boton sec" href="/gestor/exportar?seg={{ seg }}&filtro={{ q }}">Descargar CSV</a>
+  <span class="sub" style="margin:0">{{ n }} {{ 'contactos' if seg=='contactos' else 'clientes' }}{% if n_no %} · {{ n_no }} pidieron no ser contactados{% endif %}</span>
+</form>
+
+{% if lista %}
+<div class="tabla-scroll"><table>
+<tr><th>Cliente</th><th class="n">Compras</th><th class="n">Total</th><th class="n">Ticket</th><th>Última compra</th><th>Compra cada</th><th>Lo que más repite</th></tr>
+{% for c in lista %}
+<tr {% if seg != 'contactos' %}onclick="location='/gestor/cliente?k={{ c.clave|urlencode }}'" style="cursor:pointer"{% endif %}>
+<td><b>{{ c.nombre }}</b>{% if c.no_contactar %} <span class="chip otro">no contactar</span>{% endif %}
+  {% if c.mejor %} <span class="chip flow">mejor</span>{% endif %}{% if c.en_riesgo %} <span class="chip transferencia">por dormirse</span>{% endif %}{% if c.dormido %} <span class="chip">dormido</span>{% endif %}
+  <br><span class="sub" style="font-size:12px">{{ c.email or 'sin correo' }}{% if c.ciudad %} · {{ c.ciudad }}{% endif %}{% if c.tipo %} · {{ c.tipo }}{% endif %}</span></td>
+<td class="n">{{ c.compras or '' }}</td>
+<td class="n">{{ c.total|clp if c.total }}</td>
+<td class="n">{{ c.ticket|clp if c.ticket }}</td>
+<td style="white-space:nowrap">{{ c.ultima.strftime('%d-%m-%Y') if c.ultima }}{% if c.dias is not none %}<br><span class="sub" style="font-size:12px">hace {{ c.dias }} días</span>{% endif %}</td>
+<td>{{ (c.cada ~ ' días') if c.cada else '' }}</td>
+<td style="font-size:13px">{% if c.veces and c.veces > 1 %}{{ c.favorito }} <b>×{{ c.veces }}</b>{% endif %}</td>
+</tr>
+{% endfor %}
+</table></div>
+{% if n > 400 %}<p class="sub">Se muestran 400. Descarga el CSV para ver todos.</p>{% endif %}
+{% else %}<div class="vacio">Nadie en este grupo{{ ' con esa búsqueda' if q }}.</div>{% endif %}
+{% endif %}
+
+<div class="tarjeta" style="margin-top:20px">
+  <form class="subir" method="post" action="/gestor/contactos" enctype="multipart/form-data">
+    <b>Subir lista de contactos (mayoristas, agrupaciones, artesanas)</b>
+    <input type="file" name="archivo" accept=".xlsx,.xls,.csv" required>
+    <input name="tipo" value="mayorista" style="max-width:150px" title="Tipo si el archivo no trae columna tipo">
+    <button class="sec">Subir</button>
+  </form>
+  <p class="sub" style="margin:8px 0 0">Excel o CSV con columnas <b>nombre</b> y <b>correo</b> (opcional: tipo, teléfono, comuna). Quedan en el grupo «Lista subida» para avisarles de fondos o enviarles cotizaciones.</p>
+</div>
+{% endblock %}

@@ -19,6 +19,9 @@ import productos  # noqa: F401
 import conciliacion  # noqa: F401
 import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
+import rutas_gestor
+import gestor  # noqa: F401
+import mercadopublico  # noqa: F401
 
 BASE = Path(__file__).parent
 app = FastAPI(title="Sistema Topwool")
@@ -33,6 +36,7 @@ ULTIMA_COMPARACION = {"filas": [], "fecha": None, "archivo": "", "trabajo": {}}
 @app.on_event("startup")
 def _inicio():
     db.init()
+    rutas_gestor.iniciar_automatico()
 
 
 def _logueado(request: Request):
@@ -56,7 +60,7 @@ def volver(request, url, aviso=None, error=None):
 
 @app.middleware("http")
 async def proteger(request: Request, call_next):
-    libre = request.url.path.startswith(("/login", "/static", "/salud"))
+    libre = request.url.path.startswith(("/login", "/static", "/salud", "/baja"))
     if not libre and request.session.get("ok") is not True:
         return RedirectResponse("/login", status_code=303)
     return await call_next(request)
@@ -494,6 +498,8 @@ async def actualizar_inventario(request: Request):
 # ---------- cobranza ----------
 rutas_cobranza._ui.update(render=render, volver=volver)
 app.include_router(rutas_cobranza.router)
+rutas_gestor._ui.update(render=render, volver=volver)
+app.include_router(rutas_gestor.router)
 
 
 # ---------- ajustes ----------

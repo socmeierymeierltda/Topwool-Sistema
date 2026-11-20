@@ -1,0 +1,33 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_gestor_nav.html" %}
+<p><a href="/gestor">← Volver a clientes</a></p>
+<div class="tarjeta">
+  <h2 style="margin:0">{{ c.nombre }}</h2>
+  <p class="sub" style="margin:4px 0 10px">{{ c.email or 'sin correo' }}{% if c.ciudad %} · {{ c.ciudad }}{% endif %}{% if c.region %}, {{ c.region }}{% endif %}</p>
+  <div class="grilla">
+    <div class="c3"><span class="sub" style="margin:0">Compras</span><div style="font-size:24px;font-weight:800">{{ c.compras }}</div></div>
+    <div class="c3"><span class="sub" style="margin:0">Total</span><div style="font-size:24px;font-weight:800">{{ c.total|clp }}</div></div>
+    <div class="c3"><span class="sub" style="margin:0">Ticket promedio</span><div style="font-size:24px;font-weight:800">{{ c.ticket|clp }}</div></div>
+    <div class="c3"><span class="sub" style="margin:0">Compra cada</span><div style="font-size:24px;font-weight:800">{{ (c.cada ~ ' días') if c.cada else '—' }}</div></div>
+  </div>
+  <p style="margin:12px 0 0">Primera compra {{ c.primera.strftime('%d-%m-%Y') }} · última {{ c.ultima.strftime('%d-%m-%Y') }} (hace {{ c.dias }} días)</p>
+  {% if c.email %}
+  <form method="post" action="/gestor/no-contactar" style="margin-top:10px">
+    <input type="hidden" name="email" value="{{ c.email }}"><input type="hidden" name="volver" value="/gestor/cliente?k={{ c.clave|urlencode }}">
+    {% if c.no_contactar %}<span class="chip otro">No quiere recibir campañas</span> <button class="sec chico" name="quitar" value="1">Volver a permitir</button>
+    {% else %}<button class="sec chico">No enviarle campañas</button>{% endif %}
+  </form>{% endif %}
+</div>
+<div class="grilla">
+  <div class="tarjeta c6"><b>Productos que repite</b>
+    {% if c.repetidos %}<ul>{% for n, v in c.repetidos %}<li>{{ n }} — {{ v }} pedidos</li>{% endfor %}</ul>{% else %}<p class="sub">Aún no repite ningún producto.</p>{% endif %}
+    <b>Familias</b><p class="sub" style="margin:4px 0 0">{% for f, v in c.familias %}{{ f }}{{ ', ' if not loop.last }}{% endfor %}</p>
+  </div>
+  <div class="tarjeta c6"><b>Pedidos</b>
+    <table>{% for f, num, t in c.pedidos %}<tr><td>{{ f.strftime('%d-%m-%Y') }}</td><td>#{{ num }}</td><td class="n">{{ t|clp }}</td></tr>{% endfor %}</table>
+  </div>
+</div>
+{% if envios %}<div class="tarjeta"><b>Campañas que ha recibido</b>
+<table>{% for e, cp in envios %}<tr><td>{{ e.fecha.strftime('%d-%m-%Y') }}</td><td>{{ cp.nombre }}</td><td>{{ 'enviado' if e.ok else 'error' }}</td></tr>{% endfor %}</table></div>{% endif %}
+{% endblock %}

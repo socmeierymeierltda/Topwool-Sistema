@@ -1,0 +1,69 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_gestor_nav.html" %}
+<p class="sub">Licitaciones y Compras Ágiles publicadas en Mercado Público que mencionan nuestras palabras clave. El sistema revisa solo dos veces al día{% if aj.mp_avisar_correo %} y te avisa a {{ aj.mp_avisar_correo }} cuando aparece algo nuevo{% endif %}.{% if aj.mp_ultima_busqueda %} Última búsqueda: {{ aj.mp_ultima_busqueda.replace('T', ' ') }}.{% endif %}</p>
+
+{% if not ticket %}
+<div class="tarjeta" style="border-left:4px solid var(--amarillo)">
+  <b>Falta conectar Mercado Público</b>
+  <ol style="margin:8px 0 0;padding-left:20px">
+    <li>Entra a <a href="https://api.mercadopublico.cl/modules/IniciarSesion.aspx" target="_blank">api.mercadopublico.cl</a> con tu <b>Clave Única</b> y pide el <b>ticket</b> (es gratis; llega por correo).</li>
+    <li>En Render → topwool-sistema → <b>Environment</b>, agrega la variable <code>MERCADOPUBLICO_TICKET</code> y pega ahí el ticket. No lo envíes por chat.</li>
+    <li>Guarda: Render se reinicia solo y desde ahí la búsqueda funciona.</li>
+  </ol>
+  {% if demo %}<p class="sub" style="margin:8px 0 0">En modo demo el botón «Buscar ahora» carga ejemplos inventados.</p>{% endif %}
+</div>
+{% endif %}
+
+<div class="filtros">
+  {% for v, n in [('abiertas','Abiertas'),('interesa','Me interesan'),('postulada','Postuladas'),('descartada','Descartadas'),('todas','Todas')] %}
+  <a class="boton {{ '' if ver==v else 'sec' }}" href="/gestor/mercado?ver={{ v }}&tipo={{ tipo }}">{{ n }}</a>{% endfor %}
+  <select onchange="location='/gestor/mercado?ver={{ ver }}&tipo='+this.value" style="width:auto">
+    {% for t, n in [('','Licitaciones y Compra Ágil'),('licitacion','Solo licitaciones'),('compra_agil','Solo Compra Ágil')] %}<option value="{{ t }}" {{ 'selected' if tipo==t }}>{{ n }}</option>{% endfor %}
+  </select>
+  <form method="post" action="/gestor/mercado/buscar"><button class="verde" {{ 'disabled' if (not ticket and not demo) or trabajo.estado=='procesando' }}>Buscar ahora</button></form>
+</div>
+
+{% if lista %}
+<div class="tabla-scroll"><table>
+<tr><th>Cierra</th><th>Oportunidad</th><th>Organismo</th><th class="n">Monto</th><th></th></tr>
+{% for o in lista %}{% set horas = ((o.cierre - ahora).total_seconds() / 3600) if o.cierre else none %}
+<tr>
+<td style="white-space:nowrap">{% if o.cierre %}<b style="{{ 'color:var(--rojo)' if horas is not none and horas < 48 }}">{{ o.cierre.strftime('%d-%m %H:%M') }}</b><br><span class="sub" style="font-size:12px">{% if horas < 0 %}cerrada{% elif horas < 24 %}en {{ horas|int }} h{% else %}en {{ (horas/24)|int }} días{% endif %}</span>{% endif %}</td>
+<td><span class="chip {{ 'flow' if o.tipo=='compra_agil' else 'transferencia' }}">{{ 'Compra Ágil' if o.tipo=='compra_agil' else 'Licitación' }}</span>
+  {% if o.estado=='nueva' %}<span class="chip otro">nueva</span>{% endif %}<br>
+  <b>{{ o.nombre }}</b><br>
+  <span class="sub" style="font-size:12px">{{ o.codigo }} · palabras: {{ o.palabras }}</span>
+  {% if o.descripcion %}<br><span class="sub" style="font-size:12px">{{ o.descripcion[:220] }}{{ '…' if o.descripcion|length > 220 }}</span>{% endif %}
+  {% if o.nota %}<br><span style="font-size:13px">📝 {{ o.nota }}</span>{% endif %}</td>
+<td style="font-size:13px">{{ o.organismo or '' }}<br><span class="sub" style="font-size:12px">{{ o.region or '' }}</span></td>
+<td class="n">{{ o.monto|clp if o.monto }}</td>
+<td style="min-width:170px">
+  <a class="boton sec chico" target="_blank" href="{{ link_lic.format(c=o.codigo) if o.tipo=='licitacion' else 'https://buscador.mercadopublico.cl/ficha?code=' ~ o.codigo }}">Ver en Mercado Público</a>
+  <form method="post" action="/gestor/mercado/{{ o.codigo }}/estado" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">
+    <input type="hidden" name="ver" value="{{ ver }}">
+    {% if o.estado != 'interesa' %}<button class="sec chico" name="estado" value="interesa">Me interesa</button>{% endif %}
+    {% if o.estado != 'postulada' %}<button class="verde chico" name="estado" value="postulada">Postulé</button>{% endif %}
+    {% if o.estado != 'descartada' %}<button class="sec chico" name="estado" value="descartada">Descartar</button>{% else %}<button class="sec chico" name="estado" value="nueva">Recuperar</button>{% endif %}
+  </form>
+</td>
+</tr>
+{% endfor %}
+</table></div>
+{% else %}<div class="vacio">{{ 'No hay oportunidades abiertas con esas palabras por ahora.' if ver=='abiertas' else 'Nada por aquí.' }}</div>{% endif %}
+
+<details class="tarjeta" style="margin-top:20px">
+  <summary><b>Palabras clave y avisos</b></summary>
+  <form method="post" action="/gestor/mercado/ajustes" class="grilla" style="margin-top:10px">
+    <div class="campo c12"><label>Buscar estas palabras (separadas por coma; «lana» también encuentra «lanas»)</label><textarea name="mp_palabras" rows="2">{{ aj.mp_palabras }}</textarea></div>
+    <div class="campo c12"><label>Ignorar si dice (para no recibir algodón clínico, lana de vidrio, etc.)</label><textarea name="mp_excluir" rows="2">{{ aj.mp_excluir }}</textarea></div>
+    <div class="campo c6"><label>Avisarme por correo cuando aparezca algo nuevo (vacío = no avisar)</label><input name="mp_avisar_correo" value="{{ aj.mp_avisar_correo }}" placeholder="contacto@topwool.cl">{% if not smtp %}<span class="sub" style="font-size:12px">Requiere el correo de envío configurado en Render.</span>{% endif %}</div>
+    <div class="campo c6"><label>Campañas: responder a</label><input name="gestor_responder_a" value="{{ aj.gestor_responder_a }}"></div>
+    <div class="campo c4"><label>Cliente dormido después de (días)</label><input name="gestor_dias_dormido" value="{{ aj.gestor_dias_dormido }}"></div>
+    <div class="campo c4"><label>Máximo de correos por campaña</label><input name="gestor_max_envios" value="{{ aj.gestor_max_envios }}"></div>
+    <div class="campo c4"><label>Dirección pública del sistema (para el enlace de baja)</label><input name="gestor_url_publica" value="{{ aj.gestor_url_publica }}" placeholder="https://topwool-sistema.onrender.com"></div>
+    <div class="c12"><button>Guardar</button></div>
+  </form>
+</details>
+<p class="sub" style="font-size:12px">Datos: API de Mercado Público (ChileCompra). Para postular necesitas estar inscrita como proveedora en mercadopublico.cl.</p>
+{% endblock %}

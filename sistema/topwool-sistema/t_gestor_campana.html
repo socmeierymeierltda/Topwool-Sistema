@@ -1,0 +1,45 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_gestor_nav.html" %}
+<p class="sub">Elige a quién escribir, ajusta el mensaje y envía primero una prueba a tu correo. Cada correo sale personalizado y con un enlace para darse de baja (obligatorio en Chile para correos promocionales). <a href="/gestor/campanas">Ver campañas enviadas →</a></p>
+{% if not smtp %}<div class="msg err">Falta configurar el correo de envío (SMTP_USER y SMTP_PASSWORD en Render → Environment). Sin eso no se puede enviar.</div>{% endif %}
+
+<form method="get" class="filtros">
+  <select name="seg" style="width:auto">{% for k, n in segmentos.items() %}<option value="{{ k }}" {{ 'selected' if seg==k }}>{{ n }}</option>{% endfor %}</select>
+  <input name="filtro" value="{{ filtro }}" placeholder="Solo quienes compran… (ej: malal, merino socks)" style="max-width:300px">
+  <button class="sec">Cambiar grupo</button>
+  <span class="sub" style="margin:0"><b>{{ n }}</b> destinatarios con correo{% if recientes %} · {{ recientes }} ya recibieron una campaña en los últimos 14 días{% endif %}</span>
+</form>
+
+<form method="post" action="/gestor/campana" class="tarjeta" onsubmit="if(!event.submitter||event.submitter.name!=='prueba'){return confirm('¿Enviar la campaña a {{ n }} clientes?')}">
+  <input type="hidden" name="seg" value="{{ seg }}"><input type="hidden" name="filtro" value="{{ filtro }}">
+  <div class="grilla">
+    <div class="campo c6"><label>Nombre de la campaña (para ti)</label><input name="nombre" value="{{ segmentos[seg] }} {{ filtro }} – {{ '%02d'|format(campanas|length + 1) }}"></div>
+    <div class="campo c6"><label>Responder a</label><input value="{{ aj.gestor_responder_a }}" disabled title="Se cambia en Mercado Público → Ajustes"></div>
+    <div class="campo c12"><label>Asunto</label><input name="asunto" value="{{ asunto }}" required></div>
+    <div class="campo c12"><label>Mensaje</label><textarea name="cuerpo" rows="11" required>{{ cuerpo }}</textarea>
+      <span class="sub" style="font-size:12px">Puedes usar: {nombre} {compras} {total} {producto} {veces} {dias} {cada} {ultima} {cupon} {descuento} {vence}</span></div>
+    <div class="campo c4"><label><input type="checkbox" name="cupon" value="1" style="width:auto" {{ 'checked' if seg in ('mejores','dormidos','en_riesgo','repiten','nuevos') }}> Crear cupón en la web</label>
+      <span class="sub" style="font-size:12px">Un código de un solo uso, válido solo para estos correos.</span></div>
+    <div class="campo c4"><label>Descuento (%)</label><input type="number" name="porcentaje" value="{{ 15 if seg=='mejores' else 10 }}" min="1" max="60"></div>
+    <div class="campo c4"><label>Días de vigencia</label><input type="number" name="dias" value="15" min="1" max="120"></div>
+    <div class="campo c12"><label><input type="checkbox" name="saltar_recientes" value="1" style="width:auto" checked> No enviar a quienes recibieron otra campaña en los últimos 14 días</label></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+    <button class="sec" name="prueba" value="1" {{ 'disabled' if not smtp and not demo }}>Enviarme una prueba{% if smtp_user %} ({{ aj.gestor_responder_a or smtp_user }}){% endif %}</button>
+    <button class="verde" {{ 'disabled' if (not smtp and not demo) or not n }}>Enviar a {{ n }} clientes</button>
+  </div>
+  <p class="sub" style="margin:8px 0 0;font-size:12px">Gmail permite unos 500 correos al día; el sistema envía máximo {{ aj.gestor_max_envios }} por campaña, uno cada segundo y medio. Si se corta, vuelve a enviarla al día siguiente: los ya contactados se saltan.</p>
+</form>
+
+{% if previas %}
+<div class="tarjeta"><b>Así lo verán</b> <span class="sub">(cupón y fecha de ejemplo)</span>
+{% for c, a, cu in previas %}
+  <div style="border-top:1px solid var(--linea);margin-top:10px;padding-top:10px">
+    <span class="sub" style="font-size:12px">Para: {{ c.email }}</span><br><b>{{ a }}</b>
+    <pre style="white-space:pre-wrap;font-family:inherit;margin:6px 0 0">{{ cu }}</pre>
+  </div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}

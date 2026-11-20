@@ -1,0 +1,11 @@
+<h1>Gestor web</h1>
+<div class="filtros" style="margin-bottom:14px">
+  {% for k, n, u in [('clientes','Clientes','/gestor'),('campanas','Campañas','/gestor/campana'),('mercado','Mercado Público','/gestor/mercado'),('fondos','Fondos públicos','/gestor/fondos')] %}
+  <a class="boton {{ '' if pest==k else 'sec' }}" href="{{ u }}">{{ n }}</a>{% endfor %}
+</div>
+{% if trabajo and trabajo.estado == 'procesando' %}
+<div class="msg demo" id="trabajo">⏳ {{ trabajo.mensaje }}</div>
+<script>setTimeout(function(){location.reload()}, 4000)</script>
+{% elif trabajo and trabajo.estado in ('listo','error') and trabajo.tipo == {'campanas':'campana','mercado':'mercado'}.get(pest) %}
+<div class="msg {{ 'ok' if trabajo.estado=='listo' else 'err' }}">{{ trabajo.mensaje }}</div>
+{% endif %}

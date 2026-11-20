@@ -1,0 +1,19 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_gestor_nav.html" %}
+<p><a class="boton verde" href="/gestor/campana">Nueva campaña</a></p>
+{% if lista %}
+<div class="tabla-scroll"><table>
+<tr><th>Fecha</th><th>Campaña</th><th>Grupo</th><th>Cupón</th><th class="n">Enviados</th><th>Estado</th></tr>
+{% for c in lista %}
+<tr><td style="white-space:nowrap">{{ c.fecha.strftime('%d-%m-%Y %H:%M') }}</td>
+<td><b>{{ c.nombre }}</b><br><span class="sub" style="font-size:12px">{{ c.asunto }}</span>{% if c.nota %}<br><span class="sub" style="font-size:12px;color:var(--rojo)">{{ c.nota }}</span>{% endif %}</td>
+<td>{{ c.segmento }}{% if c.filtro %} · {{ c.filtro }}{% endif %}</td>
+<td>{% if c.cupon %}<code>{{ c.cupon }}</code><br><span class="sub" style="font-size:12px">{{ c.descuento }} hasta {{ c.vence.strftime('%d-%m') if c.vence }}</span>{% endif %}</td>
+<td class="n">{{ c.enviados }} / {{ c.destinatarios }}{% if c.errores %}<br><span class="sub" style="font-size:12px">{{ c.errores }} con error</span>{% endif %}</td>
+<td><span class="chip {{ 'flow' if c.estado=='enviada' else 'transferencia' if c.estado=='enviando' else 'otro' }}">{{ c.estado }}</span></td></tr>
+{% endfor %}
+</table></div>
+<p class="sub">Para ver cuántos usaron el cupón: en <a href="/informes">Informes</a> aparece la lista de cupones usados.</p>
+{% else %}<div class="vacio">Aún no hay campañas.</div>{% endif %}
+{% endblock %}

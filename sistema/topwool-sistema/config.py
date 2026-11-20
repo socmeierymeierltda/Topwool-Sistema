@@ -36,6 +36,9 @@ SMTP_USER = _env("SMTP_USER")
 SMTP_PASSWORD = _env("SMTP_PASSWORD").replace(" ", "")
 
 # Modo demo: muestra pedidos de ejemplo y no escribe en ningún lado
+# Mercado Público: ticket que se pide con Clave Única en api.mercadopublico.cl
+MERCADOPUBLICO_TICKET = _env("MERCADOPUBLICO_TICKET")
+
 DEMO = _env("DEMO", "1" if not (WOO_KEY and WOO_SECRET) else "0") == "1"
 
 # Reglas de los pedidos web (editables también desde la pantalla Ajustes)
@@ -75,6 +78,19 @@ DEFAULTS = {
     "aviso_despacho": ("¡Hola {nombre}! Tu pedido de Topwool ya va en camino 🚚\n"
                        "Empresa de transporte: {empresa}\nN° de seguimiento: {tracking}\n"
                        "Puedes seguirlo aquí: {link}\n\n¡Gracias por tejer con nosotros!"),
+    # Gestor web
+    "gestor_dias_dormido": "180",
+    "gestor_max_envios": "300",
+    "gestor_responder_a": "contacto@topwool.cl",
+    "gestor_url_publica": "",
+    # Mercado Público
+    "mp_palabras": ("lana, hilo, hilado, vellon, vellón, algodon, algodón, ovillo, madeja, telar, fieltro, "
+                    "tejido, tejer, palillo, crochet, merino, alpaca, mohair, artesania textil"),
+    "mp_excluir": ("algodon hidrofilo, algodon prensado, torula, aposito, gasa, quirurg, sutura, hilo dental, "
+                   "lana de vidrio, lana mineral, lana de roca, aislacion, aislante, tejido adiposo, hilo de pesca, "
+                   "hilo nylon, hilo electrico, malla, geotextil"),
+    "mp_avisar_correo": "",
+    "mp_ultima_busqueda": "",
     "correo_asunto": "Tu pedido #{numero} en Topwool está esperando el pago",
     "correo_cuerpo": ("Hola {nombre}:\n\n"
                       "Vimos que tu pedido #{numero} en topwool.cl quedó pendiente de pago.\n\n"
