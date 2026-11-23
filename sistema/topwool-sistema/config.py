@@ -36,6 +36,11 @@ SMTP_USER = _env("SMTP_USER")
 SMTP_PASSWORD = _env("SMTP_PASSWORD").replace(" ", "")
 
 # Modo demo: muestra pedidos de ejemplo y no escribe en ningún lado
+# Instagram: token de larga duración generado en Meta for Developers (el sistema lo renueva solo)
+IG_TOKEN = _env("IG_TOKEN")
+# Render entrega la dirección pública del servicio en esta variable
+URL_PUBLICA = _env("RENDER_EXTERNAL_URL")
+
 # Mercado Público: ticket que se pide con Clave Única en api.mercadopublico.cl
 MERCADOPUBLICO_TICKET = _env("MERCADOPUBLICO_TICKET")
 

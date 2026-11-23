@@ -22,6 +22,7 @@ import rutas_cobranza
 import rutas_gestor
 import rutas_marketing
 import marketing  # noqa: F401
+import instagram  # noqa: F401
 import gestor  # noqa: F401
 import mercadopublico  # noqa: F401
 
@@ -41,6 +42,7 @@ ULTIMA_COMPARACION = {"filas": [], "fecha": None, "archivo": "", "trabajo": {}}
 def _inicio():
     db.init()
     rutas_gestor.iniciar_automatico()
+    instagram.iniciar_automatico(rutas_marketing.base_publica)
 
 
 def _logueado(request: Request):
@@ -64,7 +66,7 @@ def volver(request, url, aviso=None, error=None):
 
 @app.middleware("http")
 async def proteger(request: Request, call_next):
-    libre = request.url.path.startswith(("/login", "/static", "/salud", "/baja"))
+    libre = request.url.path.startswith(("/login", "/static", "/salud", "/baja", "/media/"))
     if not libre and request.session.get("ok") is not True:
         return RedirectResponse("/login", status_code=303)
     return await call_next(request)

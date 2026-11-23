@@ -1,0 +1,55 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_marketing_nav.html" %}
+{% if not ok %}
+<div class="tarjeta" style="border-left:4px solid var(--amarillo)">
+  <b>Conectar Instagram (una sola vez, ~15 minutos)</b>
+  <ol style="margin:8px 0 0;padding-left:20px;line-height:1.6">
+    <li>Entra a <a href="https://developers.facebook.com/apps" target="_blank">developers.facebook.com/apps</a> con la cuenta de Facebook que administra Topwool (si te pide, regístrate como desarrolladora: es gratis).</li>
+    <li><b>Crear app</b> → caso de uso <b>Otro</b> → tipo <b>Negocios</b> → nombre «Sistema Topwool» y tu correo.</li>
+    <li>En la app, busca el producto <b>Instagram</b> y aprieta <b>Configurar</b>.</li>
+    <li>En <b>Instagram → Configuración de la API con inicio de sesión de Instagram</b>, en «Generar tokens de acceso», aprieta <b>Agregar cuenta</b> e ingresa con la cuenta de Instagram de Topwool.</li>
+    <li>Al lado de la cuenta aprieta <b>Generar token</b>, acepta los permisos y copia el token (es un texto largo).</li>
+    <li>En Render → topwool-sistema → <b>Environment</b>, agrega <code>IG_TOKEN</code> y pega el token ahí (no lo envíes por chat). Guarda.</li>
+  </ol>
+  <p class="sub" style="margin:8px 0 0">El token dura 60 días, pero el sistema lo renueva solo cada semana. La cuenta de Instagram tiene que ser profesional (empresa).</p>
+</div>
+{% else %}
+{% if err %}<div class="msg err">Instagram respondió: {{ err }}. Si dice que el token venció o no es válido, genera uno nuevo y reemplázalo en Render (IG_TOKEN).</div>{% endif %}
+<div class="tarjeta" style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+  {% if info.profile_picture_url %}<img src="{{ info.profile_picture_url }}" style="width:56px;height:56px;border-radius:50%">{% endif %}
+  <div><b style="font-size:18px">@{{ info.username or aj.ig_usuario }}</b><br>
+    <span class="sub" style="margin:0">{{ info.followers_count or '—' }} seguidores · {{ info.media_count or '—' }} publicaciones{% if aj.ig_ultima_sync %} · resultados al {{ aj.ig_ultima_sync.replace('T', ' ') }}{% endif %}</span></div>
+  <form method="post" action="/marketing/instagram/sincronizar" style="margin-left:auto"><button class="sec">Actualizar resultados</button></form>
+</div>
+{% if programadas %}<div class="tarjeta"><b>Programadas para publicarse solas</b>
+  {% for p in programadas %}<div style="font-size:14px;margin-top:6px">{{ p.fecha.strftime('%d-%m') }} {{ p.hora or '10:00' }} · <span class="chip">{{ p.canal }}</span> <a href="/marketing/pieza?pid={{ p.id }}">{{ p.titulo }}</a></div>{% endfor %}</div>{% endif %}
+
+{% if por_tipo %}
+<div class="grilla">
+  <div class="tarjeta c6"><b>Qué formato funciona mejor</b> <span class="sub" style="font-size:12px">(interacción promedio: me gusta + comentarios + 2× guardados y compartidos)</span>
+    <table style="margin-top:6px"><tr><th>Formato</th><th class="n">Publicaciones</th><th class="n">Interacción</th><th class="n">Alcance</th></tr>
+    {% for k, v in por_tipo.items() %}<tr><td>{{ k }}</td><td class="n">{{ v.n }}</td><td class="n"><b>{{ v.inter|round|int }}</b></td><td class="n">{{ v.alcance|round|int }}</td></tr>{% endfor %}</table></div>
+  <div class="tarjeta c6"><b>Mejor día para publicar</b>
+    <table style="margin-top:6px"><tr><th>Día</th><th class="n">Publicaciones</th><th class="n">Interacción</th><th class="n">Alcance</th></tr>
+    {% for k, v in por_dia.items() %}<tr><td>{{ k }}</td><td class="n">{{ v.n }}</td><td class="n"><b>{{ v.inter|round|int }}</b></td><td class="n">{{ v.alcance|round|int }}</td></tr>{% endfor %}</table></div>
+</div>
+{% endif %}
+
+{% if medias %}
+<div class="tarjeta"><b>Últimas publicaciones</b>
+<div class="tabla-scroll" style="margin-top:6px"><table>
+<tr><th></th><th>Fecha</th><th>Publicación</th><th class="n">Alcance</th><th class="n">Vistas</th><th class="n">Me gusta</th><th class="n">Coment.</th><th class="n">Guardados</th><th class="n">Compart.</th><th class="n">Interacción</th></tr>
+{% for m in medias %}
+<tr><td>{% if m.miniatura %}<a href="{{ m.permalink }}" target="_blank"><img src="{{ m.miniatura }}" style="width:54px;height:54px;object-fit:cover;border-radius:6px" loading="lazy"></a>{% endif %}</td>
+<td style="white-space:nowrap">{{ m.fecha.strftime('%d-%m-%Y') }}<br><span class="sub" style="font-size:12px">{{ m.fecha.strftime('%H:%M') }} · {{ {'REELS':'Reel','FEED':{'CAROUSEL_ALBUM':'Carrusel','IMAGE':'Foto','VIDEO':'Video'}.get(m.tipo, m.tipo),'STORY':'Historia'}.get(m.producto, m.producto) }}</span></td>
+<td style="font-size:13px;max-width:330px">{{ (m.caption or '')[:120] }}{{ '…' if (m.caption or '')|length > 120 }}{% if m.pieza_id %}<br><a class="sub" style="font-size:12px" href="/marketing/pieza?pid={{ m.pieza_id }}">ver pieza de la grilla</a>{% endif %}</td>
+{% for k in ['reach','views','likes','comments','saved','shares'] %}<td class="n">{{ m.met.get(k) if m.met.get(k) is not none else '' }}</td>{% endfor %}
+<td class="n"><b>{{ ('%.1f'|format(m.tasa) ~ ' %') if m.tasa is not none else '' }}</b></td></tr>
+{% endfor %}
+</table></div>
+<p class="sub" style="font-size:12px;margin:6px 0 0">Interacción = (me gusta + comentarios + guardados + compartidos) / alcance. Los resultados se actualizan solos cada 6 horas; Meta entrega el detalle de los últimos 90 días.</p>
+</div>
+{% else %}<div class="vacio">Aprieta «Actualizar resultados» para traer tus publicaciones.</div>{% endif %}
+{% endif %}
+{% endblock %}

@@ -61,7 +61,14 @@ def init():
               ("envios_produccion", "pdf", "BYTEA" if pg else "BLOB"),
               ("seguimiento_filas", "despachado", "TIMESTAMP"),
               ("gestor_fondos", "origen", "VARCHAR(80)"),
-              ("mk_piezas", "publico", "VARCHAR(30)")]
+              ("mk_piezas", "publico", "VARCHAR(30)"),
+              ("mk_piezas", "hora", "VARCHAR(5)"),
+              ("mk_piezas", "ig_auto", "BOOLEAN"),
+              ("mk_piezas", "ig_id", "VARCHAR(40)"),
+              ("mk_piezas", "ig_link", "VARCHAR(300)"),
+              ("mk_piezas", "ig_error", "TEXT"),
+              ("mk_piezas", "ig_publicada", "TIMESTAMP"),
+              ("mk_piezas", "ig_metricas", "TEXT")]
     for tabla, col, tipo in nuevas:
         sql = f"ALTER TABLE {tabla} ADD COLUMN {'IF NOT EXISTS ' if pg else ''}{col} {tipo}"
         try:

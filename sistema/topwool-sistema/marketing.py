@@ -15,7 +15,7 @@ MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto
          "noviembre", "diciembre"]
 DIAS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
 CANALES = ["Instagram", "Reel", "Historias", "Facebook", "Meta Ads", "Correo", "Web", "WhatsApp", "TikTok"]
-ESTADOS = ["idea", "en preparación", "listo", "publicado"]
+ESTADOS = ["idea", "en preparación", "listo", "programado", "publicado"]
 PUBLICOS = ["Todos", "Clientes web", "Mayoristas"]
 
 
@@ -50,6 +50,13 @@ class Pieza(db.Base):
     resultado = Column(Text)
     generada = Column(Boolean, default=False)
     creado = Column(DateTime, default=datetime.now)
+    hora = Column(String(5))           # hora de publicación (Chile)
+    ig_auto = Column(Boolean, default=False)   # publicar sola en Instagram a la hora indicada
+    ig_id = Column(String(40), index=True)
+    ig_link = Column(String(300))
+    ig_error = Column(Text)
+    ig_publicada = Column(DateTime)
+    ig_metricas = Column(Text)
 
 
 # ---------------- calendario de Chile ----------------

@@ -3,8 +3,10 @@ import calendar
 import io
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+import threading
+
+from fastapi import APIRouter, File, Form, Request, UploadFile
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from sqlalchemy import select
 
 import db
@@ -20,6 +22,15 @@ def _render(*a, **k):
 
 def _volver(*a, **k):
     return _ui["volver"](*a, **k)
+
+
+def base_publica(request=None):
+    """Dirección pública del sistema (Instagram descarga desde ahí las fotos y videos)."""
+    import config
+    u = (db.ajustes().get("gestor_url_publica") or "").strip() or config.URL_PUBLICA or (str(request.base_url) if request else "")
+    if u.startswith("http://") and "localhost" not in u and "127.0.0.1" not in u:
+        u = "https://" + u[7:]
+    return u.rstrip("/")
 
 
 def _mes(mes):
@@ -126,11 +137,17 @@ def ver_pieza(request: Request, pid: int = 0, fecha: str = ""):
     with db.Session() as s:
         p = s.get(mk.Pieza, pid) if pid else mk.Pieza(fecha=date.fromisoformat(fecha) if fecha else date.today(),
                                                        canal="Instagram", estado="idea")
-        evs = mk.eventos_entre(s, p.fecha - timedelta(days=3), p.fecha + timedelta(days=14))
+        evs = mk.eventos_entre(s, p.fecha - timedelta(days=3), p.fecha + timedelta(days=14)) if p else []
+        import instagram as ig
+        archivos = list(s.scalars(select(ig.IgArchivo).where(ig.IgArchivo.pieza_id == p.id)
+                                  .order_by(ig.IgArchivo.orden, ig.IgArchivo.id))) if p and p.id else []
     if not p:
         return _volver(request, "/marketing/calendario", error="No encontré esa pieza.")
     return _render(request, "marketing_pieza.html", p=p, canales=mk.CANALES, estados=mk.ESTADOS, evs=evs, publicos=mk.PUBLICOS,
-                   formatos=list(mk.GUIAS), link=mk.utm("https://www.topwool.cl/", p.canal, p.campana))
+                   formatos=list(mk.GUIAS), link=mk.utm("https://www.topwool.cl/", p.canal, p.campana),
+                   archivos=archivos, ig_ok=ig.conectado(), ig_usuario=db.ajustes().get("ig_usuario"),
+                   ig_tipo=ig.tipo_publicacion(p, archivos) if archivos else "",
+                   metricas=__import__("json").loads(p.ig_metricas) if p.ig_metricas else {})
 
 
 @router.post("/marketing/pieza")
@@ -138,7 +155,8 @@ def guardar_pieza(request: Request, pid: int = Form(0), fecha: str = Form(...), 
                   publico: str = Form("Todos"),
                   titulo: str = Form(""), producto: str = Form(""), campana: str = Form(""), texto: str = Form(""),
                   guia: str = Form(""), cta: str = Form(""), cupon: str = Form(""), estado: str = Form("idea"),
-                  resultado: str = Form(""), borrar: str = Form("")):
+                  resultado: str = Form(""), borrar: str = Form(""), hora: str = Form("10:00"), ig_auto: str = Form(""),
+                  archivos: list[UploadFile] = File([])):
     f = date.fromisoformat(fecha)
     with db.Session() as s:
         p = s.get(mk.Pieza, pid) if pid else None
@@ -152,8 +170,112 @@ def guardar_pieza(request: Request, pid: int = Form(0), fecha: str = Form(...), 
         p.fecha, p.canal, p.formato, p.titulo, p.producto = f, canal, formato[:60], titulo[:200], producto[:150]
         p.campana, p.copy, p.guia, p.cta, p.cupon = campana[:120], texto.replace("\r\n", "\n"), guia.replace("\r\n", "\n"), cta[:200], cupon[:60]
         p.estado, p.resultado, p.publico = estado, resultado, publico
+        p.hora = hora[:5] if hora else "10:00"
+        p.ig_auto = bool(ig_auto)
+        if p.ig_auto and p.estado not in ("publicado",):
+            p.estado = "programado"
+        elif not p.ig_auto and p.estado == "programado":
+            p.estado = "listo"
+        s.flush()
+        import instagram as ig
+        subidos = 0
+        for a in archivos or []:
+            if a and a.filename:
+                try:
+                    ig.guardar_archivo(s, p.id, a.file.read(), a.filename, a.content_type or "")
+                    subidos += 1
+                except Exception as e:  # noqa: BLE001
+                    s.rollback()
+                    return _volver(request, f"/marketing/pieza?pid={p.id}", error=f"No pude leer {a.filename}: {str(e)[:150]}")
         s.commit()
-    return _volver(request, f"/marketing/calendario?mes={f:%Y-%m}", aviso="Pieza guardada.")
+        pid = p.id
+        aviso = "Pieza guardada" + (f" con {subidos} archivo(s)" if subidos else "") + \
+            (f". Se publicará sola en Instagram el {f:%d-%m} a las {p.hora}." if p.ig_auto else ".")
+    if subidos or ig_auto:
+        return _volver(request, f"/marketing/pieza?pid={pid}", aviso=aviso)
+    return _volver(request, f"/marketing/calendario?mes={f:%Y-%m}", aviso=aviso)
+
+
+@router.post("/marketing/pieza/{pid}/archivo/{aid}/borrar")
+def borrar_archivo(request: Request, pid: int, aid: int):
+    import instagram as ig
+    with db.Session() as s:
+        a = s.get(ig.IgArchivo, aid)
+        if a and a.pieza_id == pid:
+            s.delete(a)
+            s.commit()
+    return _volver(request, f"/marketing/pieza?pid={pid}", aviso="Archivo quitado.")
+
+
+@router.post("/marketing/pieza/{pid}/publicar")
+def publicar_ahora(request: Request, pid: int):
+    import instagram as ig
+    if not ig.conectado():
+        return _volver(request, f"/marketing/pieza?pid={pid}", error="Instagram no está conectado (falta IG_TOKEN en Render).")
+    base = base_publica(request)
+    threading.Thread(target=ig.publicar_pieza, args=(pid, base), daemon=True).start()
+    return _volver(request, f"/marketing/pieza?pid={pid}",
+                   aviso="Publicando en Instagram… las fotos tardan unos segundos y los videos hasta 2 minutos. Recarga la página para ver el resultado.")
+
+
+@router.get("/media/{nombre}")
+def media_publica(nombre: str):
+    """Archivo de una pieza en URL pública (nombre largo imposible de adivinar) para que Instagram lo descargue."""
+    import instagram as ig
+    clave = nombre.rsplit(".", 1)[0]
+    with db.Session() as s:
+        a = s.scalars(select(ig.IgArchivo).where(ig.IgArchivo.clave == clave)).first()
+        if not a:
+            return Response(status_code=404)
+        return Response(a.datos, media_type=a.tipo, headers={"Cache-Control": "public, max-age=3600"})
+
+
+@router.get("/marketing/miniatura/{aid}")
+def miniatura(aid: int):
+    import instagram as ig
+    with db.Session() as s:
+        a = s.get(ig.IgArchivo, aid)
+        if not a:
+            return Response(status_code=404)
+        return Response(a.datos, media_type=a.tipo)
+
+
+@router.get("/marketing/instagram", response_class=HTMLResponse)
+def ver_instagram(request: Request):
+    import json
+
+    import instagram as ig
+    aj = db.ajustes()
+    info, err = {}, ""
+    if ig.conectado():
+        try:
+            info = ig.cuenta()
+        except Exception as e:  # noqa: BLE001
+            err = str(e)[:300]
+    with db.Session() as s:
+        medias = list(s.scalars(select(ig.IgMedia).order_by(ig.IgMedia.fecha.desc()).limit(60)))
+        for m in medias:
+            m.met = json.loads(m.metricas or "{}")
+            r = m.met.get("reach") or 0
+            m.tasa = 100 * ((m.met.get("likes") or 0) + (m.met.get("comments") or 0) + (m.met.get("saved") or 0)
+                            + (m.met.get("shares") or 0)) / r if r else None
+        por_tipo, por_dia = ig.resumen([m for m in medias if m.producto != "STORY"])
+        programadas = list(s.scalars(select(mk.Pieza).where(mk.Pieza.estado == "programado").order_by(mk.Pieza.fecha)))
+    mejores = sorted([m for m in medias if m.tasa is not None], key=lambda m: -m.tasa)[:5]
+    return _render(request, "marketing_instagram.html", pest="instagram", ok=ig.conectado(), info=info, err=err, aj=aj,
+                   medias=medias, por_tipo=por_tipo, por_dia=por_dia, mejores=mejores, programadas=programadas,
+                   base=base_publica(request))
+
+
+@router.post("/marketing/instagram/sincronizar")
+def ig_sincronizar(request: Request):
+    import instagram as ig
+    try:
+        ig.renovar_token()
+        nuevos, total = ig.sincronizar()
+    except Exception as e:  # noqa: BLE001
+        return _volver(request, "/marketing/instagram", error=f"Instagram respondió: {str(e)[:250]}")
+    return _volver(request, "/marketing/instagram", aviso=f"Resultados actualizados: {total} publicaciones ({nuevos} nuevas).")
 
 
 @router.post("/marketing/pieza/{pid}/estado")

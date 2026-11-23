@@ -2,7 +2,7 @@
 {% block contenido %}
 {% set pest = 'calendario' %}{% include "t_marketing_nav.html" %}
 <p><a href="/marketing/calendario?mes={{ p.fecha.strftime('%Y-%m') }}">← Volver al calendario</a></p>
-<form method="post" action="/marketing/pieza" class="tarjeta">
+<form method="post" action="/marketing/pieza" class="tarjeta" enctype="multipart/form-data">
   <input type="hidden" name="pid" value="{{ p.id or 0 }}">
   <div class="grilla">
     <div class="campo c3"><label>Fecha</label><input type="date" name="fecha" value="{{ p.fecha.isoformat() }}" required></div>
@@ -20,6 +20,26 @@
     <div class="campo c12"><label>Enlace con seguimiento (para medir cuánto vende esta pieza)</label>
       <input value="{{ link }}" readonly onclick="this.select()" style="font-size:13px"><span class="sub" style="font-size:12px">Úsalo en la bio, historias o anuncios: así Google Analytics y WooCommerce muestran de dónde vino la venta.</span></div>
     {% if p.canal == 'WhatsApp' %}<div class="campo c12"><span class="sub" style="font-size:13px">Para enviarlo a cada mayorista con un clic: Gestor web → Campañas → grupo «Lista subida» (aparecen botones de WhatsApp con este texto). Para todos de una vez, usa una lista de difusión en WhatsApp Business.</span></div>{% endif %}
+    {% if p.canal in ('Instagram', 'Reel', 'Historias') %}
+    <div class="campo c12" style="border-top:1px solid var(--linea);padding-top:12px;margin-top:4px">
+      <label>Instagram {% if ig_ok and ig_usuario %}<span style="text-transform:none;font-weight:400">(@{{ ig_usuario }})</span>{% endif %}</label>
+      {% if p.ig_link %}<div class="msg ok" style="margin:6px 0">Publicado {{ p.ig_publicada.strftime('%d-%m %H:%M') if p.ig_publicada }} · <a href="{{ p.ig_link }}" target="_blank">ver en Instagram</a>{% if metricas %} · {% for k, n in [('reach','alcance'),('views','vistas'),('likes','me gusta'),('comments','comentarios'),('saved','guardados'),('shares','compartidos')] %}{% if metricas.get(k) is not none %}{{ metricas[k] }} {{ n }}{{ ' · ' if not loop.last }}{% endif %}{% endfor %}{% endif %}</div>{% endif %}
+      {% if p.ig_error %}<div class="msg err" style="margin:6px 0">Instagram no aceptó la publicación: {{ p.ig_error }}</div>{% endif %}
+      {% if archivos %}<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">
+        {% for a in archivos %}<div style="width:110px;text-align:center">
+          {% if a.tipo.startswith('image') %}<img src="/marketing/miniatura/{{ a.id }}" style="width:110px;height:110px;object-fit:cover;border-radius:8px">{% else %}<video src="/marketing/miniatura/{{ a.id }}" style="width:110px;height:110px;object-fit:cover;border-radius:8px" muted></video>{% endif %}
+          <button class="sec chico" formaction="/marketing/pieza/{{ p.id }}/archivo/{{ a.id }}/borrar" formnovalidate style="margin-top:3px">Quitar</button></div>{% endfor %}
+      </div>
+      <span class="sub" style="font-size:12px">Se publicará como: <b>{{ {'IMAGE':'foto','CAROUSEL':'carrusel','REELS':'reel','STORIES':'historia(s)'}[ig_tipo] }}</b>. El orden es el de subida.</span>{% endif %}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px">
+        <input type="file" name="archivos" multiple accept="image/*,video/mp4,video/quicktime" style="max-width:320px">
+        <span style="display:flex;gap:6px;align-items:center"><span class="sub" style="margin:0">Hora</span><input type="time" name="hora" value="{{ p.hora or '10:00' }}" style="width:auto"></span>
+        <label style="text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;margin:0"><input type="checkbox" name="ig_auto" value="1" style="width:auto" {{ 'checked' if p.ig_auto }} {{ 'disabled' if not ig_ok or p.ig_link }}> Publicar sola en Instagram ese día a esa hora</label>
+        {% if p.id and archivos and ig_ok and not p.ig_link %}<button class="verde chico" formaction="/marketing/pieza/{{ p.id }}/publicar" formnovalidate onclick="return confirm('¿Publicar ahora en Instagram? (guarda antes si cambiaste el texto)')">Publicar ahora</button>{% endif %}
+      </div>
+      <span class="sub" style="font-size:12px">{% if not ig_ok %}Instagram aún no está conectado: ver Marketing → Instagram. {% endif %}Fotos en vertical 4:5 o cuadradas; reels en MP4 vertical de 3 a 90 s. La música de Instagram no se puede poner desde aquí: si el reel lleva audio en tendencia, publícalo desde el teléfono.</span>
+    </div>
+    {% endif %}
     <div class="campo c12"><label>Resultado (alcance, guardados, ventas, aprendizajes)</label><textarea name="resultado" rows="3">{{ p.resultado or '' }}</textarea></div>
   </div>
   <div style="display:flex;gap:8px;margin-top:10px">
