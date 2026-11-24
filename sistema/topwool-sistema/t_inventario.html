@@ -1,6 +1,7 @@
 {% extends "t_base.html" %}
 {% block contenido %}
 <h1>Inventario</h1>
+<div class="msg demo" style="margin:8px 0">¿Solo quieres cambiar el stock de algunos productos a mano? Usa <a href="/inventario/rapido"><b>Stock rápido</b></a>: buscas, escribes el número nuevo y guardas.</div>
 <p class="sub">Sube el Informe de Inventario de Defontana del día. El sistema suma todas las bodegas, lo compara con el stock de la web y te deja actualizar los que no calzan.</p>
 
 {% if trabajo.estado == 'procesando' %}

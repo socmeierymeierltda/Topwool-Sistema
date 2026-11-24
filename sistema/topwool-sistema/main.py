@@ -1,7 +1,7 @@
 """Sistema Topwool — etapa 1: pedidos web → Drive de pedidos, equivalencias e inventario."""
 import io
 import traceback
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import openpyxl
@@ -489,6 +489,148 @@ async def comparar_inventario(request: Request, archivo: UploadFile = File(...))
         return msg
     _en_segundo_plano(tarea)
     return RedirectResponse("/inventario", status_code=303)
+
+
+# ---------------- stock rápido: editar el stock de la web a mano, varios a la vez ----------------
+CATALOGO_WEB = {"datos": None, "fecha": None, "cargando": False, "error": ""}
+
+
+def _cargar_catalogo():
+    import threading
+
+    def correr():
+        CATALOGO_WEB.update(cargando=True, error="")
+        try:
+            CATALOGO_WEB.update(datos=woo.catalogo() if not config.DEMO else _catalogo_demo(), fecha=datetime.now())
+        except Exception as e:  # noqa: BLE001
+            traceback.print_exc()
+            CATALOGO_WEB["error"] = str(e)[:250]
+        CATALOGO_WEB["cargando"] = False
+    if not CATALOGO_WEB["cargando"]:
+        threading.Thread(target=correr, daemon=True).start()
+
+
+def _catalogo_demo():
+    out = {}
+    for i, (n, sku, st) in enumerate([("Malal - Rojo", "CHIMAROJO100", 12), ("Malal - Mostaza", "100CHIMAMOSTAZA", 97),
+                                      ("Algodón DK - Blanco", "CHIADKBLANCO", None), ("Merino Socks - Azul", "SOCKAZUL", 0)]):
+        out[100 + i] = {"id": 100 + i, "parent": 10, "nombre": n, "sku": sku, "stock": st, "maneja": st is not None}
+    out[10] = {"id": 10, "parent": 0, "nombre": "Malal", "sku": "", "stock": None, "maneja": False}
+    return out
+
+
+def _items_vendibles(cat):
+    padres = {w["parent"] for w in cat.values() if w["parent"]}
+    return sorted([w for w in cat.values() if w["id"] not in padres], key=lambda w: (w["nombre"] or "").lower())
+
+
+@app.get("/inventario/rapido", response_class=HTMLResponse)
+def stock_rapido(request: Request, q: str = "", solo: str = "", recargar: str = ""):
+    viejo = CATALOGO_WEB["fecha"] and CATALOGO_WEB["fecha"] < datetime.now() - timedelta(minutes=30)
+    if recargar or CATALOGO_WEB["datos"] is None or viejo:
+        _cargar_catalogo()
+    items = _items_vendibles(CATALOGO_WEB["datos"] or {})
+    if q:
+        palabras = cobranza.norm(q).split()
+        items = [w for w in items if all(p in cobranza.norm(f"{w['nombre']} {w['sku'] or ''}") for p in palabras)]
+    if solo == "agotados":
+        items = [w for w in items if (w["stock"] or 0) <= 0 and w["stock"] is not None]
+    elif solo == "sin_control":
+        items = [w for w in items if w["stock"] is None]
+    return render(request, "stock_rapido.html", items=items, q=q, solo=solo, cat=CATALOGO_WEB)
+
+
+@app.post("/inventario/rapido")
+async def stock_rapido_guardar(request: Request):
+    form = await request.form()
+    cat = CATALOGO_WEB["datos"] or {}
+    cambios = []
+    for k, v in form.items():
+        if not k.startswith("s_") or str(v).strip() == "":
+            continue
+        wid = int(k[2:])
+        w = cat.get(wid)
+        try:
+            nuevo = int(float(str(v).replace(",", ".")))
+        except ValueError:
+            continue
+        if w and nuevo != w["stock"]:
+            cambios.append({"id": wid, "parent": w["parent"], "stock": max(0, nuevo)})
+    if not cambios:
+        return volver(request, "/inventario/rapido?" + str(form.get("qs") or ""), aviso="No había cambios que guardar.")
+    try:
+        n = woo.actualizar_stock(cambios)
+    except Exception as e:  # noqa: BLE001
+        return volver(request, "/inventario/rapido", error=f"La web no aceptó el cambio: {str(e)[:200]}")
+    for c in cambios:
+        cat[c["id"]]["stock"], cat[c["id"]]["maneja"] = c["stock"], True
+    return volver(request, "/inventario/rapido?" + str(form.get("qs") or ""),
+                  aviso=f"Stock actualizado en la web: {n} productos" + (" (modo demo: no se cambió la web)." if config.DEMO else "."))
+
+
+@app.get("/inventario/rapido/excel")
+def stock_rapido_excel():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Stock"
+    ws.append(["ID web", "Producto y color", "SKU", "Stock actual en la web", "Stock nuevo (escribe solo lo que cambia)"])
+    for c in ws[1]:
+        c.font = Font(name="Arial", bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="5B4636")
+    amarillo = PatternFill("solid", fgColor="FFF6D6")
+    for w in _items_vendibles(CATALOGO_WEB["datos"] or {}):
+        ws.append([w["id"], w["nombre"], w["sku"] or "", w["stock"] if w["stock"] is not None else "sin control", None])
+        ws.cell(ws.max_row, 5).fill = amarillo
+    for col, ancho in zip("ABCDE", [9, 46, 22, 14, 22]):
+        ws.column_dimensions[col].width = ancho
+    ws.freeze_panes = "A2"
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f'attachment; filename="stock_web_{date.today():%Y%m%d}.xlsx"'})
+
+
+@app.post("/inventario/rapido/excel")
+async def stock_rapido_subir(request: Request, archivo: UploadFile = File(...)):
+    import openpyxl
+    cat = CATALOGO_WEB["datos"] or {}
+    if not cat:
+        return volver(request, "/inventario/rapido", error="Espera a que cargue el catálogo de la web y vuelve a subir el archivo.")
+    try:
+        ws = openpyxl.load_workbook(io.BytesIO(await archivo.read()), data_only=True).worksheets[0]
+    except Exception as e:  # noqa: BLE001
+        return volver(request, "/inventario/rapido", error=f"No pude leer el Excel: {str(e)[:150]}")
+    cab = [cobranza.norm(str(c.value or "")) for c in ws[1]]
+    i_id = next((i for i, c in enumerate(cab) if c.startswith("id")), None)
+    i_n = next((i for i, c in enumerate(cab) if "nuevo" in c), None)
+    if i_id is None or i_n is None:
+        return volver(request, "/inventario/rapido", error="El Excel debe tener las columnas «ID web» y «Stock nuevo» (usa el que se descarga aquí).")
+    cambios = []
+    for r in ws.iter_rows(min_row=2, values_only=True):
+        try:
+            wid, nuevo = int(r[i_id]), r[i_n]
+        except (TypeError, ValueError):
+            continue
+        if nuevo in (None, "") or wid not in cat:
+            continue
+        try:
+            nuevo = max(0, int(float(str(nuevo).replace(",", "."))))
+        except ValueError:
+            continue
+        if nuevo != cat[wid]["stock"]:
+            cambios.append({"id": wid, "parent": cat[wid]["parent"], "stock": nuevo})
+    if not cambios:
+        return volver(request, "/inventario/rapido", aviso="El Excel no traía cambios de stock.")
+    try:
+        n = woo.actualizar_stock(cambios)
+    except Exception as e:  # noqa: BLE001
+        return volver(request, "/inventario/rapido", error=f"La web no aceptó el cambio: {str(e)[:200]}")
+    for c in cambios:
+        cat[c["id"]]["stock"], cat[c["id"]]["maneja"] = c["stock"], True
+    return volver(request, "/inventario/rapido", aviso=f"Stock actualizado en la web desde el Excel: {n} productos.")
 
 
 @app.post("/inventario/condiciones")

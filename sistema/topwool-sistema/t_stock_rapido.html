@@ -1,0 +1,50 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+<h1>Stock rápido</h1>
+<p class="sub">Cambia el stock de la web de varios productos a la vez: escribe el número nuevo solo donde cambia y aprieta «Guardar». <a href="/inventario">← Inventario con Defontana</a></p>
+
+{% if cat.cargando %}<div class="msg demo">⏳ Leyendo los productos de la web… (unos segundos)</div><script>setTimeout(function(){location.reload()}, 4000)</script>{% endif %}
+{% if cat.error %}<div class="msg err">No pude leer la web: {{ cat.error }}</div>{% endif %}
+
+<div class="tarjeta">
+  <form class="subir" method="post" action="/inventario/rapido/excel" enctype="multipart/form-data">
+    <b>Con Excel</b>
+    <a class="boton sec" href="/inventario/rapido/excel">1. Descargar planilla</a>
+    <span class="sub" style="margin:0">2. Completa la columna amarilla «Stock nuevo» (solo lo que cambia)</span>
+    <input type="file" name="archivo" accept=".xlsx" required style="max-width:260px">
+    <button>3. Subir y actualizar la web</button>
+  </form>
+</div>
+
+<form method="get" class="filtros">
+  <input name="q" value="{{ q }}" placeholder="Buscar: malal, socks, CHIMA…" style="max-width:260px" autofocus>
+  <select name="solo" style="width:auto">
+    {% for k, n in [('', 'Todos'), ('agotados', 'Solo agotados'), ('sin_control', 'Sin control de stock')] %}<option value="{{ k }}" {{ 'selected' if solo==k }}>{{ n }}</option>{% endfor %}
+  </select>
+  <button class="sec">Buscar</button>
+  <a class="boton sec" href="/inventario/rapido?recargar=1">Volver a leer la web</a>
+  <span class="sub" style="margin:0">{{ items|length }} productos{% if cat.fecha %} · leídos {{ cat.fecha.strftime('%H:%M') }}{% endif %}</span>
+</form>
+
+{% if items %}
+<form method="post" action="/inventario/rapido" id="frs">
+<input type="hidden" name="qs" value="q={{ q|urlencode }}&solo={{ solo }}">
+<div class="tabla-scroll"><table>
+<tr><th>Producto y color</th><th>SKU</th><th class="n">Stock actual</th><th style="width:130px">Stock nuevo</th></tr>
+{% for w in items %}
+<tr><td>{{ w.nombre }}</td><td style="font-size:13px">{{ w.sku or '' }}</td>
+<td class="n">{% if w.stock is none %}<span class="sub" style="font-size:12px">sin control</span>{% elif w.stock <= 0 %}<b style="color:var(--rojo)">{{ w.stock }}</b>{% else %}{{ w.stock }}{% endif %}</td>
+<td><input type="number" name="s_{{ w.id }}" min="0" step="1" inputmode="numeric" style="width:110px" oninput="this.style.background=this.value?'var(--amarillo-bg)':'';cuenta()"></td></tr>
+{% endfor %}
+</table></div>
+<div class="barra-fija" style="position:sticky;bottom:0;background:var(--papel);padding:10px 0;display:flex;gap:10px;align-items:center;border-top:1px solid var(--linea)">
+  <button class="verde" id="bguardar" disabled>Guardar en la web</button><span class="sub" id="ncambios" style="margin:0">Sin cambios</span>
+</div>
+</form>
+<script>
+function cuenta(){var n=[...document.querySelectorAll('#frs input[type=number]')].filter(i=>i.value!=='').length;
+document.getElementById('ncambios').textContent=n?n+' cambios por guardar':'Sin cambios';document.getElementById('bguardar').disabled=!n}
+document.getElementById('frs').addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();var ins=[...this.querySelectorAll('input[type=number]')];var i=ins.indexOf(e.target);if(ins[i+1])ins[i+1].focus()}});
+</script>
+{% elif not cat.cargando %}<div class="vacio">No hay productos{{ ' con esa búsqueda' if q }}.</div>{% endif %}
+{% endblock %}

@@ -95,5 +95,18 @@ def comparar(saldos: dict, catalogo: dict, aj=None):
             "en_web": bool(web), "regla": regla, "no_tocar": fijo,
             "difiere": bool(web) and actual != deberia and not fijo,
         })
+    # sin equivalencia: si el SKU de la web es igual al código de Defontana, se cruzan directo (1 a 1)
+    cubiertos = {f["woo_id"] for f in filas}
+    for wid, w in catalogo.items():
+        cod = (w.get("sku") or "").strip().upper()
+        if wid in cubiertos or not cod or cod not in saldos:
+            continue
+        deberia, regla = stock_web(saldos[cod], 1, cod, w.get("nombre"), c)
+        fijo = no_tocar(cod, w.get("nombre"), c)
+        filas.append({
+            "woo_id": wid, "parent": w.get("parent", 0), "nombre": w.get("nombre"), "produccion": "(mismo SKU)",
+            "unidad": "", "codigo": cod, "saldo": saldos[cod], "factor": 1, "deberia": deberia, "actual": w.get("stock"),
+            "en_web": True, "regla": regla, "no_tocar": fijo, "difiere": w.get("stock") != deberia and not fijo,
+        })
     filas.sort(key=lambda f: (not f["difiere"], f["nombre"] or ""))
     return filas
