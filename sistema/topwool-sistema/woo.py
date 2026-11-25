@@ -5,8 +5,30 @@ import config
 from demo import PEDIDOS_DEMO
 
 
+class _ClienteConReintentos(httpx.Client):
+    """El hosting de topwool.cl a veces responde 503/429 cuando recibe muchas consultas seguidas:
+    se espera un poco y se reintenta (hasta 5 veces) en vez de fallar."""
+    def send(self, request, **kw):
+        import random
+        import time
+        espera = 2
+        for intento in range(6):
+            try:
+                r = super().send(request, **kw)
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError):
+                if intento == 5:
+                    raise
+            else:
+                if r.status_code not in (429, 502, 503, 504) or intento == 5:
+                    return r
+                r.close()
+            time.sleep(espera + random.random())
+            espera = min(espera * 2, 30)
+        return r
+
+
 def _client():
-    return httpx.Client(
+    return _ClienteConReintentos(
         base_url=config.WOO_URL.rstrip("/") + "/wp-json/wc/v3/",
         auth=(config.WOO_KEY, config.WOO_SECRET),
         timeout=40,
@@ -144,7 +166,7 @@ def catalogo(progreso=None):
         return out
 
     hechos = 0
-    with ThreadPoolExecutor(max_workers=6) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         for vs in ex.map(variaciones, variables):
             for v in vs:
                 items[v["id"]] = v
