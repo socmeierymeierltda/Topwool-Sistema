@@ -15,13 +15,16 @@
   <input type="hidden" name="Lugar" value="{{ p.fila.Lugar }}">
   <input type="hidden" name="Encargado" value="{{ p.fila.Encargado }}">
   <input type="hidden" name="Mail" value="{{ p.fila.Mail }}">
+  {% if p.factura %}<input type="hidden" name="_factura" value="{{ p.factura.resumen }}">{% endif %}
   <div class="cab">
     <b>#{{ p.numero }}</b>
     <span class="chip {{ p.pago }}">{% if p.pago=='flow' %}Flow · pagado{% elif p.pago=='transferencia' %}Transferencia · esperando pago{% else %}{{ p.pago_titulo or 'Pago desconocido' }}{% endif %}</span>
     <span>{{ p.total|clp }}</span>
+    {% if p.factura %}<span class="chip" style="background:#e8eef7;color:#2c4a73;font-weight:700">🧾 {{ 'Pide factura' if p.factura.seguro else '¿Factura?' }}</span>{% endif %}
     <span class="der">{{ p.fecha }} · estado web: {{ p.estado_woo }}</span>
   </div>
   {% if p.nota_cliente %}<div class="nota" style="margin-bottom:10px">Nota del cliente: {{ p.nota_cliente }}</div>{% endif %}
+  {% if p.factura %}<div class="nota" style="margin-bottom:10px;background:#eef2f8;border-color:#c9d6ea">🧾 <b>{{ 'El cliente pidió factura' if p.factura.seguro else 'Puede que pida factura (puso empresa)' }}</b>{% for e, v in p.factura.datos %}<br>{{ e }}: <b>{{ v }}</b>{% endfor %}<br><span class="sub" style="font-size:12px;margin:0">Esto no se envía al Drive.</span></div>{% endif %}
   <div class="grilla">
     <div class="campo c3"><label>Cliente</label><input name="Cliente" value="{{ p.fila.Cliente }}"></div>
     <div class="campo c2"><label>Teléfono</label><input name="Telefono" value="{{ p.fila.Telefono }}"></div>
@@ -55,7 +58,7 @@
 <div class="tabla-scroll"><table>
 <tr><th>Pedido</th><th>Cliente</th><th>Total</th><th>Ingresado</th><th>Productos</th><th></th></tr>
 {% for p in por_confirmar %}
-<tr><td>#{{ p.numero }}</td><td>{{ p.cliente }}</td><td class="n">{{ p.total|clp }}</td>
+<tr><td>#{{ p.numero }}{% if p.factura %}<br><span class="chip" style="background:#e8eef7;color:#2c4a73" title="{{ p.factura }}">🧾 factura</span>{% endif %}</td><td>{{ p.cliente }}</td><td class="n">{{ p.total|clp }}</td>
 <td>{{ p.enviado.strftime('%d-%m %H:%M') if p.enviado }}</td><td>{{ p.pedido_texto }}</td>
 <td><div style="display:flex;gap:6px;flex-wrap:wrap">
 <form method="post" action="/pedidos/{{ p.woo_id }}/confirmar"><button class="verde chico">Pago confirmado</button></form>
@@ -73,7 +76,7 @@
 <div class="tabla-scroll"><table>
 <tr><th>Pedido</th><th>Cliente</th><th>Estado</th><th>Fecha</th><th>Fila Drive</th><th></th></tr>
 {% for p in recientes %}
-<tr><td>#{{ p.numero }}</td><td>{{ p.cliente }}</td>
+<tr><td>#{{ p.numero }}{% if p.factura %} <span class="chip" style="background:#e8eef7;color:#2c4a73" title="{{ p.factura }}">🧾 factura</span>{% endif %}</td><td>{{ p.cliente }}</td>
 <td>{% if p.estado=='en_drive' %}<span class="chip flow">En Drive</span>{% elif p.estado=='anulado' %}<span class="chip otro">Anulado</span>{% else %}<span class="chip">Ocultado</span>{% endif %}</td>
 <td>{{ p.enviado.strftime('%d-%m %H:%M') if p.enviado }}</td><td>{{ p.fila_drive or '' }}</td>
 <td><form method="post" action="/pedidos/{{ p.woo_id }}/reabrir"><button class="sec chico" title="Volver a mostrarlo en Nuevos">Volver a nuevos</button></form></td></tr>

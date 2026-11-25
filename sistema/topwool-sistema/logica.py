@@ -61,6 +61,43 @@ def empresa_sugerida(order, aj):
     return aj["empresa_defecto"]
 
 
+SI = {"1", "yes", "si", "true", "on", "factura", "checked"}
+
+
+def factura(order):
+    """¿El cliente pidió factura? Busca en los campos extra del checkout (meta_data), la empresa y la nota.
+    Devuelve None o {"seguro": bool, "datos": [(etiqueta, valor)], "resumen": str}."""
+    seguro, datos = False, []
+    vistos = set()
+    for m in order.get("meta_data") or []:
+        k = _sin_tildes(str(m.get("key") or "").lower())
+        v = m.get("value")
+        if not isinstance(v, (str, int, float)) or k.startswith(("_wc_order_attribution", "_wcpdf", "is_vat_exempt")):
+            continue
+        vt = _sin_tildes(str(v).strip().lower())
+        if not vt:
+            continue
+        if "factura" in k and vt in SI or ("factura" in vt and any(x in k for x in ("tipo", "doc", "comprobante", "boleta", "factura"))):
+            seguro = True
+        for clave, etiqueta in (("rut", "RUT"), ("razon", "Razón social"), ("giro", "Giro"), ("empresa", "Empresa"),
+                                ("direccion_fact", "Dirección facturación"), ("correo_fact", "Correo facturación")):
+            if clave in k and etiqueta not in vistos and vt not in SI:
+                datos.append((etiqueta, str(v).strip()))
+                vistos.add(etiqueta)
+                if clave in ("razon", "giro"):
+                    seguro = True
+    bi = order.get("billing") or {}
+    if bi.get("company") and "Razón social" not in vistos and "Empresa" not in vistos:
+        datos.append(("Empresa", bi["company"]))
+    nota = _sin_tildes((order.get("customer_note") or "").lower())
+    if re.search(r"\bfactura", nota):
+        seguro = True
+    if not seguro and not any(e in ("Razón social", "Giro") for e, _ in datos) and not (bi.get("company") and "rut" in nota):
+        return None
+    return {"seguro": seguro, "datos": datos,
+            "resumen": "Pide factura" + (": " + " · ".join(f"{e} {v}" for e, v in datos) if datos else "")}
+
+
 def preparar(order, aj, por_id, por_sku):
     """Arma todo lo que se mostrará y escribirá en el Drive."""
     lineas = [linea(i, por_id, por_sku) for i in order.get("line_items", [])]
@@ -79,6 +116,7 @@ def preparar(order, aj, por_id, por_sku):
         "pago": pago,
         "pago_titulo": order.get("payment_method_title", ""),
         "nota_cliente": order.get("customer_note", ""),
+        "factura": factura(order),
         "sin_equivalencia": [t for t, ok in lineas if not ok],
         "fila": {
             "Documento": "",

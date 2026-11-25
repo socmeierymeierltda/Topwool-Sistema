@@ -70,3 +70,10 @@ def historial_demo():
                "customer_id": 0, "billing": {"email": email, "first_name": nombre, "last_name": "",
                                              "city": ciudad, "state": region},
                "shipping": {"city": ciudad, "state": region}, "line_items": items, "coupon_lines": []}
+
+
+# ejemplo de cliente que pide factura (campos extra del checkout)
+PEDIDOS_DEMO[3]["meta_data"] = [{"id": 1, "key": "_billing_tipo_documento", "value": "factura"},
+                                {"id": 2, "key": "_billing_rut", "value": "76.123.456-7"},
+                                {"id": 3, "key": "_billing_razon_social", "value": "Lanas del Sur SpA"},
+                                {"id": 4, "key": "_billing_giro", "value": "Venta de artículos de tejido"}]

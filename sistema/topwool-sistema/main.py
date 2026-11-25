@@ -167,6 +167,7 @@ async def enviar(request: Request, woo_id: int):
         p.empresa = fila["Empresa"]
         p.pedido_texto = fila["Pedido"]
         p.fila_drive = n
+        p.factura = (form.get("_factura") or "")[:300] or None
         p.enviado = db.ahora()
         s.add(p)
         s.commit()

@@ -44,6 +44,7 @@ class PedidoWeb(Base):
     confirmado = Column(DateTime)
     contactado = Column(DateTime)
     nota = Column(Text)
+    factura = Column(String(300))    # resumen si el cliente pidió factura (no va al Drive)
 
 
 class Ajuste(Base):
@@ -62,6 +63,7 @@ def init():
               ("seguimiento_filas", "despachado", "TIMESTAMP"),
               ("gestor_fondos", "origen", "VARCHAR(80)"),
               ("mk_piezas", "publico", "VARCHAR(30)"),
+              ("pedidos_web", "factura", "VARCHAR(300)"),
               ("mk_piezas", "hora", "VARCHAR(5)"),
               ("mk_piezas", "ig_auto", "BOOLEAN"),
               ("mk_piezas", "ig_id", "VARCHAR(40)"),
