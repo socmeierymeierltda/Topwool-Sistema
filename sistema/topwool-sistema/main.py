@@ -41,6 +41,12 @@ ULTIMA_COMPARACION = {"filas": [], "fecha": None, "archivo": "", "trabajo": {}}
 @app.on_event("startup")
 def _inicio():
     db.init()
+    try:
+        with db.Session() as s:
+            cobranza.reparar_vendedores(s)
+            s.commit()
+    except Exception:  # noqa: BLE001
+        traceback.print_exc()
     rutas_gestor.iniciar_automatico()
     instagram.iniciar_automatico(rutas_marketing.base_publica)
 
@@ -692,4 +698,8 @@ def ver_ajustes(request: Request):
 async def guardar_ajustes(request: Request):
     form = await request.form()
     db.guardar_ajustes({k: v.replace("\r\n", "\n") for k, v in form.items()})
+    if "vendedor_por_cliente" in form:
+        with db.Session() as s:
+            cobranza.reparar_vendedores(s)
+            s.commit()
     return volver(request, "/ajustes", aviso="Ajustes guardados.")

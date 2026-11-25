@@ -34,6 +34,7 @@
     <div class="campo c3"><label>Tamaño de letra del PDF de producción</label><select name="letra_pdf_produccion">{% for t in ['10','11','12','13','14','16'] %}<option {{ 'selected' if aj.letra_pdf_produccion==t }}>{{ t }}</option>{% endfor %}</select></div>
     <div class="campo c12" style="margin-top:10px"><b>Cobranza y despachos</b></div>
     <div class="campo c12"><label>Vendedores (nombre en el documento = nombre corto)</label><input name="vendedores" value="{{ aj.vendedores }}"></div>
+    <div class="campo c12"><label>Vendedor según el cliente (el cliente empieza con… = vendedor; manda sobre lo anterior)</label><input name="vendedor_por_cliente" value="{{ aj.vendedor_por_cliente }}"></div>
     <div class="campo c6"><label>Drive de ventas (dirección de la planilla Ventas)</label><input name="drive_ventas" value="{{ aj.drive_ventas }}"></div>
     <div class="campo c6"><label>RUT conocidos en la cartola (RUT = origen)</label><input name="ruts_conocidos" value="{{ aj.ruts_conocidos }}"></div>
     <div class="campo c6"><label>Palabras del comentario que indican "ya pagado"</label><input name="palabras_pagado" value="{{ aj.palabras_pagado }}"></div>

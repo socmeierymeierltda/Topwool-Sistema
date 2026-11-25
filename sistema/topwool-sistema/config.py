@@ -77,6 +77,7 @@ DEFAULTS = {
     # Cobranza
     "vendedores": "javier=javier, maria de los angeles=maria, mariajesus=jesu, manuel=manuel, cris=cris",
     "palabras_pagado": "efect, efectivo, pagado",
+    "vendedor_por_cliente": "web=jesu, cura=tía leo, curtidos rivera=santiago",
     "link_fedex": "https://www.fedex.com/fedextrack/?trknbr={n}",
     "link_blue": "https://www.blue.cl/seguimiento/?n_seguimiento={n}",
     "link_starken": "https://www.starken.cl/seguimiento?codigo={n}",

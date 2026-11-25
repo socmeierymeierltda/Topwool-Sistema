@@ -132,6 +132,40 @@ def link_seguimiento(empresa, tracking, aj):
     return ""
 
 
+def celda_limpia(v):
+    """Quita los errores de fórmulas de Google Sheets / Excel (#N/A, «did not find value…», #REF!, etc.)."""
+    t = str(v if v is not None else "").strip()
+    b = t.lower()
+    if b.startswith(("#n/a", "#ref", "#value", "#error", "#div", "#name", "#null", "#num", "(did not find", "did not find",
+                     "error:", "(error")):
+        return ""
+    return t
+
+
+def vendedor_por_cliente(cliente, aj):
+    """Reglas fijas: «web=jesu, cura=leo, curtidos rivera=santiago» (el cliente empieza con…)."""
+    c = norm(cliente or "")
+    for par in db.lista(aj.get("vendedor_por_cliente", "")):
+        if "=" in par:
+            k, v = [x.strip() for x in par.split("=", 1)]
+            if k and c.startswith(norm(k)):
+                return v.lower()
+    return ""
+
+
+def reparar_vendedores(s, aj=None):
+    """Aplica las reglas por cliente y borra vendedores que quedaron con texto de error."""
+    aj = aj or db.ajustes()
+    n = 0
+    for d in s.scalars(select(Documento)):
+        regla = vendedor_por_cliente(d.cliente, aj)
+        nuevo = regla or celda_limpia(d.vendedor)
+        if nuevo != (d.vendedor or ""):
+            d.vendedor = nuevo or None
+            n += 1
+    return n
+
+
 def vendedor_corto(nombre_doc, aj):
     n = norm(nombre_doc)
     for par in db.lista(aj["vendedores"]):
@@ -298,7 +332,8 @@ def registrar_documento(s, d: dict, aj) -> tuple:
         empresa = "mesón curacautín" if not tracking else ""
     doc = Documento(tipo=d["tipo"], folio=d["folio"], fecha=d["fecha"], rut=d["rut"],
                     razon_social=d["razon_social"], vendedor_doc=d["vendedor_doc"],
-                    vendedor=vendedor_corto(d["vendedor_doc"], aj), comentario=d["comentario"],
+                    vendedor=vendedor_por_cliente(cliente, aj) or vendedor_corto(d["vendedor_doc"], aj),
+                    comentario=d["comentario"],
                     cliente=cliente, empresa=empresa, tracking=tracking, monto=d["monto"],
                     flete=d["flete"], total=d["total"], detalle=d["detalle"], origen="pdf",
                     archivo=d["archivo"], revisar=revisar)
@@ -393,6 +428,7 @@ def _num_celda(v):
 def importar_filas(s, filas, enc=None, medio_pago="Planilla anterior") -> int:
     """filas: la hoja Ventas como lista de filas (desde Excel o desde Google Sheets)."""
     enc = enc or {}
+    aj_v = db.ajustes()
     cab_i = next(i for i, r in enumerate(filas) if r and any(str(c or "").strip().upper() == "CLIENTE" for c in r))
     cab = [str(c or "").strip().upper() for c in filas[cab_i]]
 
@@ -421,15 +457,14 @@ def importar_filas(s, filas, enc=None, medio_pago="Planilla anterior") -> int:
             continue
         if folio and (folio, total) in por_pdf:              # ya está desde su PDF
             continue
-        doc_txt = str(col(r, "DOCUMENTO") or "").strip().lower()
+        doc_txt = celda_limpia(col(r, "DOCUMENTO")).lower()
         medio_meson = meson(str(cliente)) or meson(str(col(r, "COMENTARIO") or ""))
-        doc = Documento(tipo="importado" if doc_txt in ("", "#n/a") else doc_txt[:20], folio=folio, fecha=fecha,
+        doc = Documento(tipo="importado" if not doc_txt else doc_txt[:20], folio=folio, fecha=fecha,
                         cliente=norm(str(cliente)),
-                        vendedor=(str(col(r, "VENDEDOR") or "").strip().lower().replace("#n/a", "")
-                                  or enc.get(norm(str(cliente)), "")),
-                        empresa="mesón curacautín" if medio_meson else
-                        str(col(r, "EMPRESA") or "").strip().lower().replace("#n/a", ""),
-                        comentario=str(col(r, "COMENTARIO") or "").strip(), monto=monto, flete=flete, total=total,
+                        vendedor=(vendedor_por_cliente(str(cliente), aj_v) or celda_limpia(col(r, "VENDEDOR")).lower()
+                                  or celda_limpia(enc.get(norm(str(cliente)), ""))),
+                        empresa="mesón curacautín" if medio_meson else celda_limpia(col(r, "EMPRESA")).lower(),
+                        comentario=celda_limpia(col(r, "COMENTARIO")), monto=monto, flete=flete, total=total,
                         origen="planilla")
         s.add(doc)
         s.flush()
