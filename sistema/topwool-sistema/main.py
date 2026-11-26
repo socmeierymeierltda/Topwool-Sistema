@@ -649,6 +649,19 @@ async def actualizar_inventario(request: Request):
 # ---------- cobranza ----------
 rutas_cobranza._ui.update(render=render, volver=volver)
 app.include_router(rutas_cobranza.router)
+
+
+@app.exception_handler(Exception)
+async def _error_general(request: Request, exc: Exception):
+    """En vez de «Internal Server Error», mostrar qué pasó para poder arreglarlo."""
+    import html as _h
+    traceback.print_exception(exc)
+    detalle = _h.escape(f"{type(exc).__name__}: {str(exc)[:400]}")
+    return HTMLResponse(f"""<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<body style="font-family:system-ui,sans-serif;max-width:640px;margin:60px auto;padding:0 16px;color:#3b2f26;background:#faf7f2">
+<h2>Algo falló en el sistema</h2><p>No se completó la acción. Copia este mensaje y envíaselo a Claude para arreglarlo:</p>
+<pre style="white-space:pre-wrap;background:#fff;border:1px solid #e2d9ce;border-radius:8px;padding:12px">{_h.escape(request.method)} {_h.escape(request.url.path)}
+{detalle}</pre><p><a href="javascript:history.back()">← Volver</a></p></body>""", status_code=500)
 rutas_gestor._ui.update(render=render, volver=volver)
 app.include_router(rutas_gestor.router)
 rutas_marketing._ui.update(render=render, volver=volver)

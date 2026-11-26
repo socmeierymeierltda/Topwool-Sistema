@@ -72,8 +72,9 @@ def excel(filas, titulo) -> bytes:
         c.fill = PatternFill("solid", fgColor="5B4636")
         c.alignment = Alignment(vertical="center", wrap_text=True)
         c.border = Border(top=linea, bottom=linea, left=linea, right=linea)
-    for f in filas:
-        ws.append([f.get(c[0], "") for c in cols])
+    from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
+    for f in filas:   # sin caracteres invisibles que Excel no acepta (vienen a veces al copiar y pegar en el Drive)
+        ws.append([ILLEGAL_CHARACTERS_RE.sub(" ", str(f.get(c[0], "") or "")) for c in cols])
         for c in ws[ws.max_row]:
             c.font = Font(name="Arial", size=10)
             c.alignment = Alignment(vertical="top", wrap_text=True)
@@ -97,7 +98,19 @@ def excel(filas, titulo) -> bytes:
 
 
 def pdf(filas, titulo, tamano=14) -> bytes:
-    """Mismo contenido que el Excel, en PDF carta horizontal (para cuando no está la impresora)."""
+    """Mismo contenido que el Excel, en PDF carta horizontal. Si un pedido es tan largo que no cabe en una
+    hoja con esa letra, se reintenta con letra más chica."""
+    t = max(8, min(18, float(tamano or 14)))
+    ultimo = None
+    for intento in (t, t - 3, 8):
+        try:
+            return _pdf(filas, titulo, max(8, intento))
+        except Exception as e:  # noqa: BLE001  (LayoutError de reportlab)
+            ultimo = e
+    raise ultimo
+
+
+def _pdf(filas, titulo, tamano=14) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import landscape, letter
     from reportlab.lib.styles import ParagraphStyle
@@ -127,8 +140,11 @@ def pdf(filas, titulo, tamano=14) -> bytes:
         anchos = [a * f for a in anchos]
     data = [[Paragraph(titulos.get(c[0], c[1]), cab) for c in cols]]
     for f in filas:
-        data.append([Paragraph(escape(str(f.get(c[0], "") or "")), est[c[0] in principales]) for c in cols])
-    t = Table(data, colWidths=anchos, repeatRows=1)
+        data.append([Paragraph(escape(str(f.get(c[0], "") or "")).replace("\n", "<br/>"), est[c[0] in principales]) for c in cols])
+    try:   # las filas muy largas se pueden partir entre hojas (reportlab 4)
+        t = Table(data, colWidths=anchos, repeatRows=1, splitInRow=1)
+    except TypeError:
+        t = Table(data, colWidths=anchos, repeatRows=1)
     t.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#5B4636")),
                            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
                            ("VALIGN", (0, 0), (-1, -1), "TOP"),

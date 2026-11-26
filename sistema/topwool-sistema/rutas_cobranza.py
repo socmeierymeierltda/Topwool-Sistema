@@ -605,12 +605,24 @@ async def enviar_produccion(request: Request):
         color, numero = pr.siguiente_color(s), pr.numero_del_dia(s)
     ahora = datetime.now()
     titulo = f"Envío a producción N° {numero} — {ahora:%d-%m-%Y %H:%M} — {len(filas_)} pedidos"
-    contenido = pr.excel(filas_, titulo)
-    contenido_pdf = pr.pdf(filas_, titulo, db.ajustes().get("letra_pdf_produccion", 14))
+    try:
+        contenido = pr.excel(filas_, titulo)
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        return _volver(request, "/produccion", error=f"No pude armar el Excel (no se marcó nada): {str(e)[:200]}")
+    try:
+        contenido_pdf = pr.pdf(filas_, titulo, db.ajustes().get("letra_pdf_produccion", 14))
+    except Exception as e:  # noqa: BLE001
+        import traceback
+        traceback.print_exc()
+        contenido_pdf = None
+        if (form.get("formato") or "ambos") == "pdf":
+            return _volver(request, "/produccion", error=f"No pude armar el PDF (no se marcó nada): {str(e)[:200]}. Prueba con «Excel».")
     base = f"produccion_{ahora:%Y-%m-%d}_envio{numero}"
     formato = form.get("formato") or "ambos"
     adjuntos = ([(base + ".xlsx", contenido)] if formato in ("excel", "ambos") else []) + \
-               ([(base + ".pdf", contenido_pdf)] if formato in ("pdf", "ambos") else [])
+               ([(base + ".pdf", contenido_pdf)] if formato in ("pdf", "ambos") and contenido_pdf else [])
     destino = aj["correo_produccion"]
     estado_correo = ""
     if form.get("correo") and destino:
@@ -629,7 +641,7 @@ async def enviar_produccion(request: Request):
         estado_correo += f" · no pude pintar el Drive: {sheets.error_claro(e)}"
     with db.Session() as s:
         env = pr.EnvioProduccion(fecha=ahora, numero_dia=numero, color=color, cantidad=len(filas_),
-                                 clientes=pr.resumen_clientes(filas_), correo=estado_correo or "solo descarga",
+                                 clientes=pr.resumen_clientes(filas_), correo=(estado_correo or "solo descarga")[:250],
                                  excel=contenido, pdf=contenido_pdf)
         s.add(env)
         s.commit()
