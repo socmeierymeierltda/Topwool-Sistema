@@ -1,0 +1,23 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_marketing_nav.html" %}
+<div class="msg ok">El Excel trae un descuento por color: {{ filas|length }} colores encontrados en la web{% if faltan %}, {{ faltan|length }} ID no existen o no tienen precio (se ignoran){% endif %}. Revisa y elige las fechas.</div>
+<form method="post" action="/descuentos/programar-variantes" class="tarjeta" onsubmit="return confirm('¿Programar el descuento en {{ filas|length }} colores de la web?')">
+  <input type="hidden" name="datos" value="{{ datos }}">
+  <div class="grilla">
+    <div class="campo c4"><label>Nombre (para ti)</label><input name="nombre" value="Black Friday 2026"></div>
+    <div class="campo c3"><label>Empieza</label><input type="date" name="desde" value="{{ hoy.isoformat() }}" required></div>
+    <div class="campo c3"><label>Termina</label><input type="date" name="hasta" required></div>
+    <div class="campo c2"><label>Redondear a</label><select name="redondeo"><option value="1">$1</option><option value="10">$10</option><option value="100">$100</option></select></div>
+  </div>
+  <button class="verde" style="margin-top:10px">Programar descuentos</button> <a class="boton sec" href="/descuentos">Cancelar</a>
+</form>
+<div class="tabla-scroll"><table>
+<tr><th>Producto</th><th>Color</th><th class="n">Precio web</th><th class="n">Descuento</th><th class="n">Precio rebajado</th><th></th></tr>
+{% for f in filas %}
+<tr><td>{{ f.producto }}</td><td>{{ f.color or '—' }}</td><td class="n">{{ f.precio|clp }}</td><td class="n">{{ f.pct|round(1) }} %</td>
+<td class="n"><b style="color:var(--verde)">{{ f.nuevo|clp }}</b></td>
+<td style="font-size:12px">{% if f.rebaja_actual %}ya tiene rebaja {{ f.rebaja_actual|clp }} (se reemplaza){% endif %}{% if f.estado and f.estado != 'publish' %} · no publicado{% endif %}</td></tr>
+{% endfor %}
+</table></div>
+{% endblock %}

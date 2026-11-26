@@ -162,7 +162,10 @@ async def subir_excel(request: Request, archivo: UploadFile = File(...)):
         return _ui["volver"](request, "/descuentos", error=f"No pude leer el Excel: {str(e)[:150]}")
     cab = [cb.norm(str(c.value or "")) for c in ws[1]]
     i_id = next((i for i, c in enumerate(cab) if c.startswith("id")), None)
-    i_p = next((i for i, c in enumerate(cab) if "%" in c or "descuento" in c), None)
+    i_p = next((i for i, c in enumerate(cab) if "%" in c or c.startswith("descuento") or c == "% descuento"), None)
+    cat = cache_web.CATALOGO["datos"] or {}
+    if not cat:
+        return _ui["volver"](request, "/descuentos", error="Espera a que cargue el catálogo de la web y vuelve a subir el archivo.")
     if i_id is None or i_p is None:
         return _ui["volver"](request, "/descuentos", error="El Excel debe tener las columnas «ID web» y «% descuento».")
     pcts = {}
@@ -175,4 +178,72 @@ async def subir_excel(request: Request, archivo: UploadFile = File(...)):
             pcts[pid] = round(v * 100, 1) if 0 < v < 1 else v      # 0,2 en Excel con formato % = 20 %
         except (TypeError, ValueError):
             continue
+    # ¿los ID son de colores (variantes) y no de productos? → descuento color por color
+    if pcts and sum(1 for i in pcts if i in cat and (cat[i].get("parent") or cat[i].get("tipo") == "simple")) >= len(pcts) * 0.5 \
+            and any(cat.get(i, {}).get("parent") for i in pcts):
+        return _variantes(request, pcts)
     return _pagina(request, pcts, aviso_excel=f"Se cargaron {len(pcts)} descuentos desde el Excel. Revisa las fechas y aprieta «Programar descuentos».")
+
+
+def _variantes(request, pcts, paso=1):
+    cat = cache_web.CATALOGO["datos"] or {}
+    filas, faltan = [], []
+    for i, pct in pcts.items():
+        w = cat.get(i)
+        if not w or not w.get("precio"):
+            faltan.append(i)
+            continue
+        nuevo = ds.redondear(w["precio"] * (1 - pct / 100), paso)
+        filas.append({"id": i, "parent": w.get("parent") or 0, "producto": w.get("producto") or w["nombre"],
+                      "color": w.get("color") or "", "precio": w["precio"], "pct": pct, "nuevo": nuevo,
+                      "rebaja_actual": w.get("rebaja"), "estado": w.get("estado")})
+    filas.sort(key=lambda f: (f["producto"].lower(), f["color"].lower()))
+    return _ui["render"](request, "descuentos_variantes.html", filas=filas, faltan=faltan, hoy=date.today(), pest="descuentos",
+                         datos=json.dumps({str(f["id"]): f["pct"] for f in filas}))
+
+
+@router.post("/descuentos/programar-variantes")
+async def programar_variantes(request: Request):
+    form = await request.form()
+    volver = _ui["volver"]
+    try:
+        desde = date.fromisoformat(form.get("desde")) if form.get("desde") else None
+        hasta = date.fromisoformat(form.get("hasta")) if form.get("hasta") else None
+    except ValueError:
+        return volver(request, "/descuentos", error="Revisa las fechas.")
+    if desde and hasta and hasta < desde:
+        return volver(request, "/descuentos", error="La fecha de término es anterior a la de inicio.")
+    pcts = {int(k): float(v) for k, v in json.loads(form.get("datos") or "{}").items()}
+    paso = int(form.get("redondeo") or 1)
+    cat = cache_web.CATALOGO["datos"] or {}
+    cambios, por_prod = [], {}
+    for i, pct in pcts.items():
+        w = cat.get(i)
+        if not w or not w.get("precio"):
+            continue
+        nuevo = ds.redondear(w["precio"] * (1 - pct / 100), paso)
+        if 0 < nuevo < w["precio"]:
+            par = w.get("parent") or 0
+            cambios.append({"id": i, "parent": par, "sale_price": nuevo,
+                            "desde": desde.isoformat() if desde else None, "hasta": hasta.isoformat() if hasta else None})
+            d = por_prod.setdefault(par or i, {"id": par or i, "nombre": w.get("producto") or w["nombre"], "pcts": [], "items": []})
+            d["pcts"].append(pct)
+            d["items"].append([i, par])
+    if not cambios:
+        return volver(request, "/descuentos", error="No hubo precios que cambiar.")
+    import woo
+    try:
+        n = woo.actualizar_rebajas(cambios)
+    except Exception as e:  # noqa: BLE001
+        return volver(request, "/descuentos", error=f"La web no aceptó el cambio: {str(e)[:200]}")
+    for c in cambios:
+        cat[c["id"]].update(rebaja=c["sale_price"], rebaja_desde=c["desde"] or "", rebaja_hasta=c["hasta"] or "")
+    detalle = [{"id": d["id"], "nombre": d["nombre"], "pct": round(sum(d["pcts"]) / len(d["pcts"]), 1), "items": d["items"]}
+               for d in por_prod.values()]
+    nombre = (form.get("nombre") or "").strip() or f"Descuento {date.today():%d-%m}"
+    with db.Session() as s:
+        ds.guardar(s, nombre, desde, hasta, detalle)
+        s.commit()
+    cuando = (f"del {desde:%d-%m} " if desde else "desde hoy ") + (f"al {hasta:%d-%m}" if hasta else "sin fecha de término")
+    return volver(request, "/descuentos", aviso=f"«{nombre}» programado: {n} colores de {len(detalle)} productos {cuando}."
+                  + (" (modo demo: no se cambió la web)" if config.DEMO else ""))
