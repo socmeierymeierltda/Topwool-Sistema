@@ -1,0 +1,44 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_marketing_nav.html" %}
+<p class="sub">¿Desde qué monto conviene ofrecer envío gratis? Se calcula con tus pedidos web reales de los últimos 12 meses. Es un cálculo conservador: no cuenta las compras nuevas que trae el envío gratis, solo las clientas que agregan productos para alcanzarlo.</p>
+<form method="get" class="tarjeta grilla">
+  <div class="campo c3"><label>Margen bruto de tus productos (%)</label><input type="number" name="margen" value="{{ margen|int }}" min="5" max="90"><span class="sub" style="font-size:12px">Venta menos costo del producto, sobre la venta.</span></div>
+  <div class="campo c3"><label>Costo real del despacho vs lo que cobras (%)</label><input type="number" name="costo" value="{{ costo|int }}" min="30" max="200"><span class="sub" style="font-size:12px">100 = en promedio cuesta lo mismo que cobras (ej. cobras $9.000 y a veces cuesta $5.000, a veces $12.000).</span></div>
+  <div class="campo c3"><label>Clientas que suman productos para llegar (%)</label><input type="number" name="empuje" value="{{ empuje|int }}" min="0" max="100"><span class="sub" style="font-size:12px">De las que quedan hasta un 35 % bajo el monto. 20–40 % es lo habitual.</span></div>
+  <div class="campo c3"><label>Pedidos nuevos por el envío gratis (%)</label><input type="number" name="nuevos" value="{{ nuevos|int }}" min="0" max="50"><span class="sub" style="font-size:12px">0 = cálculo conservador. Muchas tiendas ven +5 a +15 %.</span></div>
+  <div class="c12"><button class="sec">Recalcular</button></div>
+</form>
+{% if not r %}<div class="vacio">No hay pedidos web con despacho cobrado. Ve a Informes y aprieta «Actualizar datos».</div>{% else %}
+<div class="grilla">
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Monto recomendado</span><div style="font-size:30px;font-weight:800;color:var(--verde)">{{ r.mejor.umbral|clp }}</div><span class="sub" style="margin:0;font-size:13px">{{ '%.0f'|format(r.mejor.pct_ya) }} % de los pedidos ya supera ese monto · resultado {{ ('−' if r.mejor.neto < 0 else '+') }}{{ (r.mejor.neto|abs)|clp }} al mes</span></div>
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Compra promedio (sin despacho)</span><div style="font-size:26px;font-weight:800">{{ r.ticket|clp }}</div><span class="sub" style="margin:0;font-size:13px">la mitad compra menos de {{ r.mediana|clp }}</span></div>
+  <div class="tarjeta c4" style="margin:0"><span class="sub" style="margin:0">Despacho promedio cobrado</span><div style="font-size:26px;font-weight:800">{{ r.prom_envio|clp }}</div><span class="sub" style="margin:0;font-size:13px">{{ r.n|round|int }} pedidos con despacho al mes ({{ '%.0f'|format(r.pct_con_envio) }} % del total)</span></div>
+</div>
+<div class="tarjeta" style="margin-top:14px">
+  <b>Lo esencial:</b> cada despacho gratis cuesta ~{{ (r.prom_envio * costo / 100)|clp }}. Para pagarlo con tu margen de {{ margen|int }} %, la clienta tiene que comprar unos <b>{{ r.equilibrio|clp }} más</b> de lo que habría comprado.
+  Por eso el monto tiene que quedar <b>sobre</b> lo que la mayoría ya compra: si lo pones muy bajo, regalas el despacho a gente que igual iba a comprar.
+</div>
+<div class="tabla-scroll"><table>
+<tr><th class="n">Envío gratis desde</th><th class="n">Pedidos que ya lo superan</th><th class="n">Pedidos «cerca» al mes</th><th class="n">Venta extra al mes</th><th class="n">Costo despachos al mes</th><th class="n">Resultado al mes</th></tr>
+{% for f in r.filas %}
+<tr style="{{ 'background:var(--verde-bg);font-weight:700' if f.umbral == r.mejor.umbral }}">
+<td class="n">{{ f.umbral|clp }}</td><td class="n">{{ '%.0f'|format(f.pct_ya) }} %</td><td class="n">{{ '%.0f'|format(f.n_cerca) }}</td>
+<td class="n">{{ f.extra_venta|clp }}</td><td class="n">{{ f.costo|clp }}</td>
+<td class="n" style="color:{{ 'var(--verde)' if f.neto >= 0 else 'var(--rojo)' }}">{{ ('−' if f.neto < 0 else '+') }}{{ (f.neto|abs)|clp }}</td></tr>
+{% endfor %}
+</table></div>
+<p class="sub" style="font-size:12px">El recomendado es el mejor resultado entre los montos que hoy alcanza entre el 15 % y el 40 % de los pedidos: más bajo regalas despachos a quien igual iba a comprar; más alto casi nadie llega y no mueve ventas. Resultado = margen de la venta extra − costo de los despachos que dejas de cobrar. «Cerca» = pedidos hasta un 35 % bajo el monto.</p>
+<div class="grilla">
+<div class="tarjeta c6"><b>Cuánto compran (sin despacho)</b>
+  {% set mx = r.tramos|map(attribute=1)|max %}
+  {% for i, n in r.tramos %}<div style="display:flex;align-items:center;gap:8px;font-size:12px;margin-top:3px"><span style="width:90px;text-align:right;color:var(--suave)">{{ (i*10)|int }}{{ '+' if i == 12 else '–' ~ (i*10+10) }} mil</span><div style="height:12px;border-radius:0 4px 4px 0;background:var(--cafe2);width:{{ (n / mx * 100) if mx else 0 }}%"></div><span>{{ n }}</span></div>{% endfor %}
+</div>
+<div class="tarjeta c6"><b>Por región</b>
+  <table style="margin-top:6px"><tr><th>Región</th><th class="n">Pedidos/mes</th><th class="n">Despacho prom.</th><th class="n">Compra prom.</th></tr>
+  {% for reg, n, e, c in r.regiones[:12] %}<tr><td>{{ reg }}</td><td class="n">{{ '%.1f'|format(n) }}</td><td class="n">{{ e|clp }}</td><td class="n">{{ c|clp }}</td></tr>{% endfor %}</table>
+  <p class="sub" style="font-size:12px;margin:6px 0 0">En WooCommerce el envío gratis se configura por zona: puedes dar un monto distinto (o no darlo) a las regiones donde el despacho es más caro.</p>
+</div>
+</div>
+{% endif %}
+{% endblock %}

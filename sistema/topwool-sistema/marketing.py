@@ -535,3 +535,53 @@ def armar_automatico(s, aj, hoy=None):
             generar_mes(s, y, m, aj)
             hechos.append(f"{MESES[m - 1]} {y}")
     return hechos
+
+
+# ---------------- simulador de envío gratis ----------------
+def envio_gratis(s, margen=0.5, costo_pct=1.0, empuje=0.3, ventana=0.35, meses=12, hoy=None, nuevos=0.0):
+    """Simula umbrales de envío gratis con los pedidos web reales.
+    margen: margen bruto sobre la venta (0,5 = 50 %). costo_pct: costo real del despacho / lo que se cobra.
+    empuje: fracción de pedidos que estaban hasta un `ventana` bajo el umbral y que agregan productos para alcanzarlo.
+    No cuenta el aumento de pedidos nuevos que trae el envío gratis (cálculo conservador)."""
+    hoy = hoy or date.today()
+    desde = hoy - timedelta(days=30 * meses)
+    peds = [p for p in _ventas(s) if p.fecha >= desde]
+    con_envio = [p for p in peds if (p.envio or 0) > 0]
+    if not con_envio:
+        return None
+    n_meses = max(1, min(meses, ((hoy - min(p.fecha for p in peds)).days or 1) / 30))
+    sub = lambda p: (p.total or 0) - (p.envio or 0)   # noqa: E731
+    filas = []
+    for T in range(15000, 120001, 5000):
+        ya = [p for p in con_envio if sub(p) >= T]
+        cerca = [p for p in con_envio if T * (1 - ventana) <= sub(p) < T]
+        costo_ya = sum(p.envio * costo_pct for p in ya)
+        extra_venta = sum(T - sub(p) for p in cerca) * empuje
+        costo_cerca = sum(p.envio * costo_pct for p in cerca) * empuje
+        # más pedidos nuevos gracias al envío gratis (opcional): un % extra de los que superan el monto
+        n_nuevos = len(ya) * nuevos
+        ticket_ya = (sum(sub(p) for p in ya) / len(ya)) if ya else 0
+        venta_nuevos = n_nuevos * ticket_ya
+        costo_nuevos = n_nuevos * (sum(p.envio for p in ya) / len(ya) if ya else 0) * costo_pct
+        extra_venta += venta_nuevos
+        neto = extra_venta * margen - costo_ya - costo_cerca - costo_nuevos
+        filas.append({"umbral": T, "pct_ya": 100 * len(ya) / len(con_envio), "n_cerca": len(cerca) / n_meses,
+                      "extra_venta": extra_venta / n_meses, "costo": (costo_ya + costo_cerca + costo_nuevos) / n_meses,
+                      "neto": neto / n_meses})
+    subs = sorted(sub(p) for p in con_envio)
+    mediana = subs[len(subs) // 2]
+    prom_envio = sum(p.envio for p in con_envio) / len(con_envio)
+    por_region = defaultdict(list)
+    for p in con_envio:
+        por_region[p.region or "Sin región"].append(p)
+    regiones = sorted(((r, len(v) / n_meses, sum(x.envio for x in v) / len(v), sum(sub(x) for x in v) / len(v))
+                       for r, v in por_region.items()), key=lambda x: -x[1])
+    tramos = Counter(min(int(sub(p) // 10000), 12) for p in con_envio)
+    # recomendado: el mejor resultado entre los montos que alcanza entre el 15 % y el 40 % de los pedidos
+    # (más bajo regala despachos a quien igual compraba; más alto casi nadie lo alcanza y no mueve ventas)
+    banda = [f for f in filas if 15 <= f["pct_ya"] <= 40] or filas
+    mejor = max(banda, key=lambda f: f["neto"])
+    return {"filas": filas, "mejor": mejor, "n": len(con_envio) / n_meses, "pct_con_envio": 100 * len(con_envio) / len(peds),
+            "ticket": sum(subs) / len(subs), "mediana": mediana, "prom_envio": prom_envio, "regiones": regiones,
+            "tramos": [(i, tramos.get(i, 0)) for i in range(13)], "meses": round(n_meses, 1),
+            "equilibrio": prom_envio * costo_pct / margen}

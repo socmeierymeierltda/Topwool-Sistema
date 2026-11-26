@@ -344,3 +344,10 @@ def exportar(mes: str = ""):
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                              headers={"Content-Disposition": f'attachment; filename="grilla_{y}-{m:02d}.xlsx"'})
+
+
+@router.get("/marketing/envio-gratis", response_class=HTMLResponse)
+def envio_gratis(request: Request, margen: float = 50, costo: float = 100, empuje: float = 30, nuevos: float = 0):
+    with db.Session() as s:
+        r = mk.envio_gratis(s, margen=margen / 100, costo_pct=costo / 100, empuje=empuje / 100, nuevos=nuevos / 100)
+    return _render(request, "marketing_envio.html", r=r, margen=margen, costo=costo, empuje=empuje, nuevos=nuevos, pest="envio")
