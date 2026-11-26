@@ -1,0 +1,91 @@
+{% extends "t_base.html" %}
+{% block contenido %}
+{% include "t_marketing_nav.html" %}
+<p class="sub">Rebaja de precio para muchos productos a la vez, con fecha de inicio y de término: la web pone el precio rebajado sola el día de inicio (00:00) y lo quita sola al terminar el día de término (23:59). Para cupones con código, usa <a href="/gestor/cupones">Cupones</a>.</p>
+
+{% if cat.cargando %}<div class="msg demo">⏳ Leyendo los productos y precios de la web… (unos segundos)</div><script>setTimeout(function(){location.reload()}, 4000)</script>{% endif %}
+{% if cat.error %}<div class="msg err">No pude leer la web: {{ cat.error }}</div>{% endif %}
+{% if aviso_excel %}<div class="msg ok">{{ aviso_excel }}</div>{% endif %}
+
+{% if prods %}
+<form method="post" action="/descuentos/programar" id="fdesc" onsubmit="return confirm('¿Programar el descuento en '+document.getElementById('nsel').textContent+' de la web?')">
+<div class="tarjeta">
+  <div class="grilla">
+    <div class="campo c4"><label>Nombre (para ti)</label><input name="nombre" placeholder="Black Friday 2026"></div>
+    <div class="campo c3"><label>Empieza</label><input type="date" name="desde" value="{{ hoy.isoformat() }}"></div>
+    <div class="campo c3"><label>Termina</label><input type="date" name="hasta"></div>
+    <div class="campo c2"><label>Redondear a</label><select name="redondeo" id="red"><option value="10">$10</option><option value="100">$100</option><option value="1">$1</option></select></div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--linea)">
+    <b style="font-size:14px">Rellenar rápido:</b>
+    <select id="rcat" style="width:auto"><option value="">Todos los productos</option>{% for c in cats %}<option>{{ c }}</option>{% endfor %}</select>
+    <input id="rpct" type="number" min="1" max="90" placeholder="%" style="width:80px">
+    <button type="button" class="sec chico" onclick="rellenar()">Aplicar</button>
+    <button type="button" class="sec chico" onclick="document.querySelectorAll('.pct').forEach(i=>{i.value='';calc(i)})">Borrar todo</button>
+    <span class="sub" style="margin:0;font-size:13px">Después puedes cambiar el % de cada producto en la tabla.</span>
+  </div>
+</div>
+
+<div class="tabla-scroll"><table>
+<tr><th>Categoría</th><th>Producto</th><th class="n">Colores</th><th class="n">Precio normal</th><th>Rebaja actual</th><th style="width:100px">% descuento</th><th class="n">Quedaría en</th></tr>
+{% for p in prods %}
+<tr data-cat="{{ p.categoria }}">
+<td style="font-size:13px">{{ p.categoria }}</td><td><b>{{ p.nombre }}</b></td><td class="n">{{ p.n }}</td>
+<td class="n" data-min="{{ p.min }}" data-max="{{ p.max }}">{{ p.min|clp }}{% if p.max != p.min %} – {{ p.max|clp }}{% endif %}</td>
+<td style="font-size:12px">{% if p.con_rebaja %}<span class="chip flow">−{{ p.pct_actual }} %</span>{% if p.rebaja_desde or p.rebaja_hasta %}<br>{{ p.rebaja_desde[8:10] ~ '-' ~ p.rebaja_desde[5:7] if p.rebaja_desde }}{{ ' al ' ~ p.rebaja_hasta[8:10] ~ '-' ~ p.rebaja_hasta[5:7] if p.rebaja_hasta }}{% endif %}{% if p.con_rebaja < p.n %}<br>{{ p.con_rebaja }} de {{ p.n }} colores{% endif %}{% endif %}</td>
+<td><input class="pct" type="number" name="p_{{ p.id }}" min="1" max="90" step="any" value="{{ pcts.get(p.id, '')|round(1) if pcts.get(p.id) else '' }}" style="width:85px" oninput="calc(this)"></td>
+<td class="n res" style="font-weight:700;color:var(--verde)"></td>
+</tr>
+{% endfor %}
+</table></div>
+<div style="position:sticky;bottom:0;background:var(--papel);padding:10px 0;display:flex;gap:10px;align-items:center;border-top:1px solid var(--linea);flex-wrap:wrap">
+  <button class="verde">Programar descuentos</button><span class="sub" id="nsel" style="margin:0">0 productos</span>
+</div>
+</form>
+
+<div class="grilla" style="margin-top:14px">
+<div class="tarjeta c6">
+  <form class="subir" method="post" action="/descuentos/excel" enctype="multipart/form-data">
+    <b>Con Excel</b>
+    <a class="boton sec chico" href="/descuentos/excel">1. Descargar planilla</a>
+    <input type="file" name="archivo" accept=".xlsx" required style="max-width:220px">
+    <button class="sec chico">2. Subir</button>
+  </form>
+  <p class="sub" style="font-size:12px;margin:6px 0 0">Completa la columna amarilla «% descuento» solo en los productos que quieres rebajar. Al subirla, la tabla se llena con esos % para que revises antes de programar.</p>
+</div>
+<div class="tarjeta c6">
+  <b>Rebajas en la web ahora:</b> {{ activas }} colores con precio rebajado.
+  <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+    <a class="boton sec chico" href="/descuentos?recargar=1">Volver a leer la web</a>
+    {% if activas %}<form method="post" action="/descuentos/quitar-todas" onsubmit="return confirm('¿Quitar TODAS las rebajas de la web? Todos vuelven a su precio normal.')"><button class="sec chico">Quitar todas las rebajas</button></form>{% endif %}
+  </div>
+</div>
+</div>
+{% elif not cat.cargando %}<div class="vacio">No encontré productos con precio en la web.</div>{% endif %}
+
+{% if hist %}
+<div class="tarjeta"><b>Descuentos programados</b>
+<div class="tabla-scroll" style="margin-top:6px"><table>
+<tr><th>Nombre</th><th>Fechas</th><th>Productos</th><th>Estado</th><th></th></tr>
+{% for h in hist %}
+<tr><td><b>{{ h.nombre }}</b><br><span class="sub" style="font-size:12px">creado {{ h.creado.strftime('%d-%m %H:%M') }}</span></td>
+<td style="white-space:nowrap">{{ h.desde.strftime('%d-%m-%Y') if h.desde else 'hoy' }} → {{ h.hasta.strftime('%d-%m-%Y') if h.hasta else 'sin término' }}</td>
+<td style="font-size:13px">{% for d in h.prods[:6] %}{{ d.nombre }} −{{ d.pct|round(1) }} %{{ ', ' if not loop.last }}{% endfor %}{% if h.prods|length > 6 %} y {{ h.prods|length - 6 }} más{% endif %}<br><span class="sub" style="font-size:12px">{{ h.n_items }} colores</span></td>
+<td><span class="chip {{ {'activo':'flow','programado':'transferencia'}.get(h.estado_txt, 'otro') }}">{{ h.estado_txt }}</span></td>
+<td>{% if h.estado_txt in ('activo', 'programado') %}<form method="post" action="/descuentos/{{ h.id }}/quitar" onsubmit="return confirm('¿Quitar esta rebaja? Esos productos vuelven a su precio normal.')"><button class="sec chico">Quitar ahora</button></form>{% endif %}</td></tr>
+{% endfor %}
+</table></div></div>
+{% endif %}
+
+<script>
+function fmt(v){return '$'+Math.round(v).toLocaleString('es-CL')}
+function red(v){var p=+document.getElementById('red').value;return p>1?Math.round(v/p)*p:Math.round(v)}
+function calc(i){var tr=i.closest('tr'),td=tr.querySelector('[data-min]'),r=tr.querySelector('.res'),p=parseFloat(i.value);
+  if(!p){r.textContent='';i.style.background=''}else{var a=red(td.dataset.min*(1-p/100)),b=red(td.dataset.max*(1-p/100));r.textContent=fmt(a)+(a!=b?' – '+fmt(b):'');i.style.background='var(--amarillo-bg)'}
+  var n=[...document.querySelectorAll('.pct')].filter(x=>parseFloat(x.value)>0).length;document.getElementById('nsel').textContent=n+' productos'}
+function rellenar(){var c=document.getElementById('rcat').value,p=document.getElementById('rpct').value;
+  document.querySelectorAll('tr[data-cat]').forEach(tr=>{if(!c||tr.dataset.cat===c){var i=tr.querySelector('.pct');i.value=p;calc(i)}})}
+document.querySelectorAll('.pct').forEach(calc);
+document.getElementById('red')&&document.getElementById('red').addEventListener('change',()=>document.querySelectorAll('.pct').forEach(calc));
+</script>
+{% endblock %}

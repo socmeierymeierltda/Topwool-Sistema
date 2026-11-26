@@ -1,6 +1,6 @@
 <h1>Marketing</h1>
 <div class="filtros" style="margin-bottom:14px">
-  {% for k, n, u in [('panel','Panel y meta','/marketing'),('calendario','Calendario y grilla','/marketing/calendario'),('instagram','Instagram','/marketing/instagram')] %}
+  {% for k, n, u in [('panel','Panel y meta','/marketing'),('calendario','Calendario y grilla','/marketing/calendario'),('instagram','Instagram','/marketing/instagram'),('descuentos','Descuentos','/descuentos')] %}
   <a class="boton {{ '' if pest==k else 'sec' }}" href="{{ u }}">{{ n }}</a>{% endfor %}
   <a class="boton sec" href="/gestor/campana">Campañas por correo →</a>
 </div>

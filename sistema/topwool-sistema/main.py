@@ -21,6 +21,8 @@ import config, db, inventario, logica, sheets, woo
 import rutas_cobranza
 import rutas_gestor
 import rutas_marketing
+import rutas_descuentos
+import descuentos  # noqa: F401
 import marketing  # noqa: F401
 import instagram  # noqa: F401
 import gestor  # noqa: F401
@@ -499,43 +501,15 @@ async def comparar_inventario(request: Request, archivo: UploadFile = File(...))
 
 
 # ---------------- stock rápido: editar el stock de la web a mano, varios a la vez ----------------
-CATALOGO_WEB = {"datos": None, "fecha": None, "cargando": False, "error": ""}
+import cache_web
 
-
-def _cargar_catalogo():
-    import threading
-
-    def correr():
-        CATALOGO_WEB.update(cargando=True, error="")
-        try:
-            CATALOGO_WEB.update(datos=woo.catalogo() if not config.DEMO else _catalogo_demo(), fecha=datetime.now())
-        except Exception as e:  # noqa: BLE001
-            traceback.print_exc()
-            CATALOGO_WEB["error"] = str(e)[:250]
-        CATALOGO_WEB["cargando"] = False
-    if not CATALOGO_WEB["cargando"]:
-        threading.Thread(target=correr, daemon=True).start()
-
-
-def _catalogo_demo():
-    out = {}
-    for i, (n, sku, st) in enumerate([("Malal - Rojo", "CHIMAROJO100", 12), ("Malal - Mostaza", "100CHIMAMOSTAZA", 97),
-                                      ("Algodón DK - Blanco", "CHIADKBLANCO", None), ("Merino Socks - Azul", "SOCKAZUL", 0)]):
-        out[100 + i] = {"id": 100 + i, "parent": 10, "nombre": n, "sku": sku, "stock": st, "maneja": st is not None}
-    out[10] = {"id": 10, "parent": 0, "nombre": "Malal", "sku": "", "stock": None, "maneja": False}
-    return out
-
-
-def _items_vendibles(cat):
-    padres = {w["parent"] for w in cat.values() if w["parent"]}
-    return sorted([w for w in cat.values() if w["id"] not in padres], key=lambda w: (w["nombre"] or "").lower())
+CATALOGO_WEB = cache_web.CATALOGO
+_items_vendibles = cache_web.vendibles
 
 
 @app.get("/inventario/rapido", response_class=HTMLResponse)
 def stock_rapido(request: Request, q: str = "", solo: str = "", recargar: str = ""):
-    viejo = CATALOGO_WEB["fecha"] and CATALOGO_WEB["fecha"] < datetime.now() - timedelta(minutes=30)
-    if recargar or CATALOGO_WEB["datos"] is None or viejo:
-        _cargar_catalogo()
+    cache_web.asegurar(bool(recargar))
     items = _items_vendibles(CATALOGO_WEB["datos"] or {})
     if q:
         palabras = cobranza.norm(q).split()
@@ -679,6 +653,8 @@ rutas_gestor._ui.update(render=render, volver=volver)
 app.include_router(rutas_gestor.router)
 rutas_marketing._ui.update(render=render, volver=volver)
 app.include_router(rutas_marketing.router)
+rutas_descuentos._ui.update(render=render, volver=volver)
+app.include_router(rutas_descuentos.router)
 
 
 # ---------- ajustes ----------

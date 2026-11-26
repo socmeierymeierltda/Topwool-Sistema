@@ -1,4 +1,6 @@
 """Conexión con WooCommerce (API REST v3)."""
+import html
+
 import httpx
 
 import config
@@ -124,13 +126,53 @@ def cancelar(order_id, nota):
         c.post(f"orders/{order_id}/notes", json={"note": nota, "customer_note": False})
 
 
+def _precios(p):
+    def num(v):
+        try:
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    return {"precio": num(p.get("regular_price")), "rebaja": num(p.get("sale_price")),
+            "rebaja_desde": (p.get("date_on_sale_from") or "")[:10], "rebaja_hasta": (p.get("date_on_sale_to") or "")[:10]}
+
+
+def actualizar_rebajas(cambios):
+    """cambios: [{id, parent, sale_price (número o ''), desde 'YYYY-MM-DD' o None, hasta}]. Usa los endpoints batch."""
+    if config.DEMO:
+        return len(cambios)
+
+    def dato(c):
+        d = {"id": c["id"], "sale_price": "" if c["sale_price"] in (None, "") else str(int(round(c["sale_price"])))}
+        d["date_on_sale_from"] = (c["desde"] + "T00:00:00") if c.get("desde") else None
+        d["date_on_sale_to"] = (c["hasta"] + "T23:59:59") if c.get("hasta") else None
+        return d
+    simples = [c for c in cambios if not c["parent"]]
+    por_padre = {}
+    for c in cambios:
+        if c["parent"]:
+            por_padre.setdefault(c["parent"], []).append(c)
+    n = 0
+    with _client() as cl:
+        for i in range(0, len(simples), 100):
+            lote = [dato(c) for c in simples[i:i + 100]]
+            cl.post("products/batch", json={"update": lote}).raise_for_status()
+            n += len(lote)
+        for padre, vs in por_padre.items():
+            for i in range(0, len(vs), 100):
+                lote = [dato(c) for c in vs[i:i + 100]]
+                cl.post(f"products/{padre}/variations/batch", json={"update": lote}).raise_for_status()
+                n += len(lote)
+    return n
+
+
 def catalogo(progreso=None):
     """Todos los productos y variaciones con su stock: {id: {...}}.
     Pide solo los campos necesarios y lee las variaciones en paralelo (antes tardaba minutos)."""
     if config.DEMO:
         return {}
     from concurrent.futures import ThreadPoolExecutor
-    campos = "id,name,sku,type,stock_quantity,manage_stock"
+    campos = ("id,name,sku,type,status,stock_quantity,manage_stock,regular_price,sale_price,"
+              "date_on_sale_from,date_on_sale_to,categories")
     items, variables = {}, []
     with _client() as c:
         page = 1
@@ -140,7 +182,9 @@ def catalogo(progreso=None):
             data = r.json()
             for p in data:
                 items[p["id"]] = {"id": p["id"], "parent": 0, "nombre": p["name"], "sku": p.get("sku"),
-                                  "stock": p.get("stock_quantity"), "maneja": p.get("manage_stock")}
+                                  "stock": p.get("stock_quantity"), "maneja": p.get("manage_stock"),
+                                  "tipo": p.get("type"), "estado": p.get("status"), **_precios(p),
+                                  "categoria": ", ".join(html.unescape(x.get("name", "")) for x in p.get("categories") or [])}
                 if p.get("type") == "variable":
                     variables.append(p)
             if len(data) < 100:
@@ -153,13 +197,18 @@ def catalogo(progreso=None):
             vp = 1
             while True:
                 rv = cv.get(f"products/{p['id']}/variations",
-                            params={"per_page": 100, "page": vp, "_fields": "id,sku,stock_quantity,manage_stock,attributes"})
+                            params={"per_page": 100, "page": vp,
+                                    "_fields": "id,sku,stock_quantity,manage_stock,attributes,regular_price,sale_price,"
+                                               "date_on_sale_from,date_on_sale_to,status"})
                 rv.raise_for_status()
                 vs = rv.json()
                 for v in vs:
                     out.append({"id": v["id"], "parent": p["id"],
                                 "nombre": p["name"] + " - " + ", ".join(a.get("option", "") for a in v.get("attributes", [])),
-                                "sku": v.get("sku"), "stock": v.get("stock_quantity"), "maneja": v.get("manage_stock")})
+                                "sku": v.get("sku"), "stock": v.get("stock_quantity"), "maneja": v.get("manage_stock"),
+                                "tipo": "variation", "estado": v.get("status"), **_precios(v),
+                                "producto": p["name"], "color": ", ".join(a.get("option", "") for a in v.get("attributes", [])),
+                                "categoria": ", ".join(html.unescape(x.get("name", "")) for x in p.get("categories") or [])})
                 if len(vs) < 100:
                     break
                 vp += 1
